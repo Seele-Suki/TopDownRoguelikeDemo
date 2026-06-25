@@ -8,3 +8,7 @@ A Unity 2022.3 LTS top-down action roguelike demo for gameplay development pract
 - Template: 2D Built-In Render Pipeline
 - Target platform: Windows standalone
 
+## Documents
+
+- [Engineering Design](Docs/EngineeringDesign.md)
+- [Development Plan](Docs/DevelopmentPlan.md)

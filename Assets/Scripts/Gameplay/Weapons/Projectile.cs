@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using TopDownRoguelike.Gameplay.Combat;
 using UnityEngine;
 
@@ -13,18 +11,37 @@ namespace TopDownRoguelike.Gameplay.Weapons
 
         private Vector2 moveDirection;
         private GameObject owner;
+        private ProjectilePool pool;
+        private float remainingLifeTime;
+        private bool isActive;
+
+        public void SetPool(ProjectilePool projectilePool)
+        {
+            pool = projectilePool;
+        }
 
         public void Initialize(Vector2 direction, GameObject source)
         {
             moveDirection = direction.normalized;
             owner = source;
-
-            Destroy(gameObject, lifeTime);
+            remainingLifeTime = lifeTime;
+            isActive = true;
         }
 
         private void Update()
         {
+            if (!isActive)
+            {
+                return;
+            }
+
             transform.position += (Vector3)(moveDirection * speed * Time.deltaTime);
+
+            remainingLifeTime -= Time.deltaTime;
+            if (remainingLifeTime <= 0f)
+            {
+                Release();
+            }
         }
 
         private void OnTriggerEnter2D(Collider2D other)
@@ -39,6 +56,27 @@ namespace TopDownRoguelike.Gameplay.Weapons
                 DamageInfo damageInfo = new DamageInfo(damage, moveDirection, owner);
                 damageable.TakeDamage(damageInfo);
 
+                Release();
+            }
+        }
+
+        private void Release()
+        {
+            if (!isActive)
+            {
+                return;
+            }
+
+            isActive = false;
+            owner = null;
+            moveDirection = Vector2.zero;
+
+            if (pool != null)
+            {
+                pool.ReleaseProjectile(this);
+            }
+            else
+            {
                 Destroy(gameObject);
             }
         }

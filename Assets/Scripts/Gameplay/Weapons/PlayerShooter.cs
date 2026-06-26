@@ -1,12 +1,10 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace TopDownRoguelike.Gameplay.Weapons
 {
     public class PlayerShooter : MonoBehaviour
     {
-        [SerializeField] private Projectile projectilePrefab;
+        [SerializeField] private ProjectilePool projectilePool;
         [SerializeField] private Transform firePoint;
         [SerializeField] private float fireCooldown = 0.2f;
 
@@ -29,12 +27,18 @@ namespace TopDownRoguelike.Gameplay.Weapons
 
         private void Fire()
         {
+            if (projectilePool == null)
+            {
+                Debug.LogWarning("PlayerShooter needs a ProjectilePool reference.");
+                return;
+            }
+
             Vector3 mouseWorldPosition = mainCamera.ScreenToWorldPoint(Input.mousePosition);
             mouseWorldPosition.z = 0f;
 
             Vector2 fireDirection = (mouseWorldPosition - firePoint.position).normalized;
 
-            Projectile projectile = Instantiate(projectilePrefab, firePoint.position, Quaternion.identity);
+            Projectile projectile = projectilePool.GetProjectile(firePoint.position, Quaternion.identity);
             projectile.Initialize(fireDirection, gameObject);
         }
     }

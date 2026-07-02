@@ -7,13 +7,13 @@ namespace TopDownRoguelike.Gameplay.Enemies
 {
     public class EnemyHealth : MonoBehaviour, IDamageable
     {
-        [SerializeField] private int maxHealth = 3;
+        [SerializeField] private EnemyData enemyData;
 
         private int currentHealth;
 
         private void Awake()
         {
-            currentHealth = maxHealth;
+            currentHealth = enemyData != null ? enemyData.MaxHealth : 3;
         }
 
         public void TakeDamage(DamageInfo damageInfo)

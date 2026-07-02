@@ -7,14 +7,12 @@ namespace TopDownRoguelike.Gameplay.Enemies
 {
     public class EnemyAttack : MonoBehaviour
     {
-        [SerializeField] private int attackDamage = 1;
-        [SerializeField] private float attackRange = 1.3f;
-        [SerializeField] private float attackCooldown = 1f;
+        [SerializeField] private EnemyData enemyData;
 
         private Transform target;
         private float nextAttackTime;
 
-        public float AttackRange => attackRange;
+        public float AttackRange => enemyData != null ? enemyData.AttackRange : 1.3f;
 
         private void Start()
         {
@@ -32,6 +30,10 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
         private void Update()
         {
+            int attackDamage = enemyData != null ? enemyData.AttackDamage : 1;
+            float attackRange = enemyData != null ? enemyData.AttackRange : 1.3f;
+            float attackCooldown = enemyData != null ? enemyData.AttackCooldown : 1f;
+
             if (target == null || Time.time < nextAttackTime)
             {
                 return;

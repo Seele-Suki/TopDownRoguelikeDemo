@@ -7,8 +7,7 @@ namespace TopDownRoguelike.Gameplay.Enemies
     [RequireComponent(typeof(Rigidbody2D))]
     public class EnemyMovement : MonoBehaviour
     {
-        [SerializeField] private float moveSpeed = 2f;
-        [SerializeField] private float stopDistance = 1.1f;
+        [SerializeField] private EnemyData enemyData;
 
         private Rigidbody2D rb;
         private Transform target;
@@ -34,6 +33,9 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
         private void FixedUpdate()
         {
+            float moveSpeed = enemyData != null ? enemyData.MoveSpeed : 2f;
+            float stopDistance = enemyData != null ? enemyData.StopDistance : 1.1f;
+
             if (target == null)
             {
                 rb.velocity = Vector2.zero;

@@ -1,3 +1,4 @@
+using TopDownRoguelike.Gameplay.Characters;
 using UnityEngine;
 
 public class PlayerController : MonoBehaviour
@@ -8,10 +9,12 @@ public class PlayerController : MonoBehaviour
     private Rigidbody2D rb;
     private Vector2 moveInput;
     private Vector2 mouseWorldPosition;
+    private PlayerHealth playerHealth;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
+        playerHealth = GetComponent<PlayerHealth>();
 
         if (mainCamera == null)
         {
@@ -21,12 +24,20 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
+        if (playerHealth != null && playerHealth.IsDead)
+        {
+            return;
+        }
         ReadMovementInput();
         ReadMousePosition();
     }
 
     private void FixedUpdate()
     {
+        if (playerHealth != null && playerHealth.IsDead)
+        {
+            return;
+        }
         Move();
         RotateToMouse();
     }
@@ -50,6 +61,11 @@ public class PlayerController : MonoBehaviour
     private void Move()
     {
         rb.velocity = moveInput * moveSpeed;
+        if (playerHealth != null && playerHealth.IsDead)
+        {
+            rb.velocity = Vector2.zero;
+            return;
+        }
     }
 
     private void RotateToMouse()

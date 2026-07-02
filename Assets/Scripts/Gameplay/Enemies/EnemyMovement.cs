@@ -8,6 +8,7 @@ namespace TopDownRoguelike.Gameplay.Enemies
     public class EnemyMovement : MonoBehaviour
     {
         [SerializeField] private float moveSpeed = 2f;
+        [SerializeField] private float stopDistance = 1.1f;
 
         private Rigidbody2D rb;
         private Transform target;
@@ -39,7 +40,16 @@ namespace TopDownRoguelike.Gameplay.Enemies
                 return;
             }
 
-            Vector2 direction = ((Vector2)target.position - rb.position).normalized;
+            Vector2 toTarget = (Vector2)target.position - rb.position;
+            float distance = toTarget.magnitude;
+
+            if (distance <= stopDistance)
+            {
+                rb.velocity = Vector2.zero;
+                return;
+            }
+
+            Vector2 direction = toTarget.normalized;
             rb.velocity = direction * moveSpeed;
         }
     }

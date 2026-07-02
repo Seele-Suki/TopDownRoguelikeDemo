@@ -1,4 +1,5 @@
 using UnityEngine;
+using TopDownRoguelike.Gameplay.Characters;
 
 namespace TopDownRoguelike.Gameplay.Weapons
 {
@@ -10,14 +11,20 @@ namespace TopDownRoguelike.Gameplay.Weapons
 
         private Camera mainCamera;
         private float nextFireTime;
+        private PlayerHealth playerHealth;
 
         private void Awake()
         {
+            playerHealth = GetComponent<PlayerHealth>();
             mainCamera = Camera.main;
         }
 
         private void Update()
         {
+            if (playerHealth != null && playerHealth.IsDead)
+            {
+                return;
+            }
             if (Input.GetMouseButton(0) && Time.time >= nextFireTime)
             {
                 Fire();

@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace TopDownRoguelike.Gameplay.Experience
@@ -8,7 +6,14 @@ namespace TopDownRoguelike.Gameplay.Experience
     {
         [SerializeField] private int experienceAmount = 1;
 
+        private ExperienceOrbPool pool;
+
         public int ExperienceAmount => experienceAmount;
+
+        public void SetPool(ExperienceOrbPool experienceOrbPool)
+        {
+            pool = experienceOrbPool;
+        }
 
         public void Initialize(int amount)
         {
@@ -17,7 +22,14 @@ namespace TopDownRoguelike.Gameplay.Experience
 
         public void Collect()
         {
-            Destroy(gameObject);
+            if (pool != null)
+            {
+                pool.ReleaseOrb(this);
+            }
+            else
+            {
+                Destroy(gameObject);
+            }
         }
     }
 }

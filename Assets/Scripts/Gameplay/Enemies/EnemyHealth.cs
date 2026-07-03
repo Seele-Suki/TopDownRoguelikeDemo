@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using TopDownRoguelike.Gameplay.Combat;
 using TopDownRoguelike.Gameplay.Experience;
 using UnityEngine;
@@ -9,7 +7,6 @@ namespace TopDownRoguelike.Gameplay.Enemies
     public class EnemyHealth : MonoBehaviour, IDamageable
     {
         [SerializeField] private EnemyData enemyData;
-        [SerializeField] private ExperienceOrb experienceOrbPrefab;
 
         private int currentHealth;
         private bool isDead;
@@ -35,6 +32,7 @@ namespace TopDownRoguelike.Gameplay.Enemies
                 Die();
             }
         }
+
         private void Die()
         {
             isDead = true;
@@ -44,15 +42,14 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
         private void DropExperience()
         {
-            if (experienceOrbPrefab == null)
+            if (ExperienceOrbPool.Instance == null)
             {
-                Debug.LogWarning($"{name} has no ExperienceOrb prefab assigned.");
+                Debug.LogWarning("No ExperienceOrbPool found in the scene.");
                 return;
             }
 
             int experienceReward = enemyData != null ? enemyData.ExperienceReward : 1;
-            ExperienceOrb orb = Instantiate(experienceOrbPrefab, transform.position, Quaternion.identity);
-            orb.Initialize(experienceReward);
+            ExperienceOrbPool.Instance.GetOrb(transform.position, experienceReward);
         }
     }
 }

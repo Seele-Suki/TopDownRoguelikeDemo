@@ -45,5 +45,18 @@ namespace TopDownRoguelike.Gameplay.Characters
 
             Time.timeScale = 0f;
         }
+
+        public void AddMaxHealth(int amount)
+        {
+            maxHealth += amount;
+            currentHealth += amount;
+
+            if (maxHealth < 1)
+            {
+                maxHealth = 1;
+            }
+
+            currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+        }
     }
 }

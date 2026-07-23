@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1774a16745e52f544ab7bd5f95f0e895, type: 3}
+  m_Name: ProjectileDamageUp
+  m_EditorClassIdentifier: 
+  upgradeName: "\u5B50\u5F39\u4F24\u5BB3\u63D0\u5347"
+  description: "\u5B50\u5F39\u4F24\u5BB3 +1"
+  upgradeType: 3
+  floatValue: 0
+  intValue: 1

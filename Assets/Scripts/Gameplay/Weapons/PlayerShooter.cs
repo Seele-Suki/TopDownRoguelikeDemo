@@ -8,6 +8,8 @@ namespace TopDownRoguelike.Gameplay.Weapons
         [SerializeField] private ProjectilePool projectilePool;
         [SerializeField] private Transform firePoint;
         [SerializeField] private float fireCooldown = 0.2f;
+        [SerializeField] private int projectileDamage = 1;
+
 
         private Camera mainCamera;
         private float nextFireTime;
@@ -32,6 +34,12 @@ namespace TopDownRoguelike.Gameplay.Weapons
             }
         }
 
+        public void AddProjectileDamage(int amount)
+        {
+            projectileDamage += amount;
+            projectileDamage = Mathf.Max(1, projectileDamage);
+        }
+
         private void Fire()
         {
             if (projectilePool == null)
@@ -46,7 +54,13 @@ namespace TopDownRoguelike.Gameplay.Weapons
             Vector2 fireDirection = (mouseWorldPosition - firePoint.position).normalized;
 
             Projectile projectile = projectilePool.GetProjectile(firePoint.position, Quaternion.identity);
-            projectile.Initialize(fireDirection, gameObject);
+            projectile.Initialize(fireDirection, gameObject, projectileDamage);
+        }
+
+        public void AddFireRate(float amount)
+        {
+            fireCooldown -= amount;
+            fireCooldown = Mathf.Max(0.05f, fireCooldown);
         }
     }
 }

@@ -75,4 +75,10 @@ public class PlayerController : MonoBehaviour
 
         rb.rotation = angle;
     }
+
+    public void AddMoveSpeed(float amount)
+    {
+        moveSpeed += amount;
+        moveSpeed = Mathf.Max(0f, moveSpeed);
+    }
 }

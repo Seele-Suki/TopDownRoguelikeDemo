@@ -20,10 +20,11 @@ namespace TopDownRoguelike.Gameplay.Weapons
             pool = projectilePool;
         }
 
-        public void Initialize(Vector2 direction, GameObject source)
+        public void Initialize(Vector2 direction, GameObject source, int projectileDamage)
         {
             moveDirection = direction.normalized;
             owner = source;
+            damage = projectileDamage;
             remainingLifeTime = lifeTime;
             isActive = true;
         }

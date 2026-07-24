@@ -1,22 +1,37 @@
 using System.Collections;
+using TopDownRoguelike.Gameplay.Characters;
+using TopDownRoguelike.Gameplay.Skills;
 using UnityEngine;
 
 public class DashSkill : MonoBehaviour
 {
-    [Header("冲刺参数")]
-    [SerializeField] private float dashSpeed = 12f;
-    [SerializeField] private float dashDuration = 0.15f;
+    [Header("Configuration")]
+    [SerializeField] private DashData dashData;
     [SerializeField] private KeyCode dashKey = KeyCode.Space;
+
+    [Header("Runtime Debug")]
+    [SerializeField] private float cooldownRemaining;
+
+    private float dashSpeed;
+    private float dashDuration;
+    private float dashCooldown;
+    private PlayerHealth playerHealth;
+
+    public bool IsDashing { get; private set; }
+    public bool IsReady => !IsDashing && cooldownRemaining <= 0f;
+    public float CooldownRemaining => cooldownRemaining;
+
+    public float CooldownNormalized =>
+        dashCooldown > 0f ? cooldownRemaining / dashCooldown : 0f;
 
     private Rigidbody2D rb;
     private PlayerController playerController;
-
-    public bool IsDashing { get; private set; }
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
         playerController = GetComponent<PlayerController>();
+        playerHealth = GetComponent<PlayerHealth>();
 
         if (rb == null)
         {
@@ -27,11 +42,34 @@ public class DashSkill : MonoBehaviour
         {
             Debug.LogError("DashSkill: 玩家对象缺少 PlayerController。");
         }
+
+        if (dashData == null)
+        {
+            Debug.LogError("DashSkill: DashData is not assigned.");
+            enabled = false;
+            return;
+        }
+
+        dashSpeed = dashData.DashSpeed;
+        dashDuration = dashData.DashDuration;
+        dashCooldown = dashData.Cooldown;
     }
 
     private void Update()
     {
-        if (Input.GetKeyDown(dashKey) && !IsDashing)
+        if (Time.timeScale <= 0f ||
+            (playerHealth != null && playerHealth.IsDead))
+        {
+            return;
+        }
+
+        if (cooldownRemaining > 0f)
+        {
+            cooldownRemaining =
+                Mathf.Max(0f, cooldownRemaining - Time.deltaTime);
+        }
+
+        if (Input.GetKeyDown(dashKey) && IsReady)
         {
             StartCoroutine(DashCoroutine());
         }
@@ -47,6 +85,7 @@ public class DashSkill : MonoBehaviour
         }
 
         IsDashing = true;
+        cooldownRemaining = dashCooldown;
 
         // 暂时关闭普通移动，避免移动脚本覆盖冲刺速度。
         if (playerController != null)

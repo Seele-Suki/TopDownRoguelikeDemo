@@ -1576,6 +1576,7 @@ GameObject:
   - component: {fileID: 808360719}
   - component: {fileID: 808360721}
   - component: {fileID: 808360720}
+  - component: {fileID: 808360722}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -1785,6 +1786,21 @@ MonoBehaviour:
   currentExperience: 0
   experienceToNextLevel: 10
   experienceGrowthMultiplier: 1.25
+--- !u!114 &808360722
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 808360711}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6bbe4e4614d2f7f4b9218fe78b4b0e41, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dashData: {fileID: 11400000, guid: 523a76a1d2b00044aba73d7065b93653, type: 2}
+  dashKey: 32
+  cooldownRemaining: 0
 --- !u!1 &848969257
 GameObject:
   m_ObjectHideFlags: 0

@@ -9,6 +9,8 @@ namespace TopDownRoguelike.Gameplay.Upgrades
         MoveSpeedUp,
         MaxHealthUp,
         FireRateUp,
-        ProjectileDamageUp
+        ProjectileDamageUp,
+        DashCooldownDown,
+        DashDurationUp
     }
 }

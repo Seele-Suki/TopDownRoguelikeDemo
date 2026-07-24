@@ -33,6 +33,13 @@ public class DashSkill : MonoBehaviour
         playerController = GetComponent<PlayerController>();
         playerHealth = GetComponent<PlayerHealth>();
 
+        if (playerHealth == null)
+        {
+            Debug.LogError("DashSkill: Player is missing PlayerHealth.");
+            enabled = false;
+            return;
+        }
+
         if (rb == null)
         {
             Debug.LogError("DashSkill: 玩家对象缺少 Rigidbody2D。");
@@ -86,6 +93,7 @@ public class DashSkill : MonoBehaviour
 
         IsDashing = true;
         cooldownRemaining = dashCooldown;
+        playerHealth.SetInvulnerable(true);
 
         // 暂时关闭普通移动，避免移动脚本覆盖冲刺速度。
         if (playerController != null)
@@ -102,6 +110,11 @@ public class DashSkill : MonoBehaviour
             yield return null;
         }
 
+        EndDash();
+    }
+
+    private void EndDash()
+    {
         rb.velocity = Vector2.zero;
 
         if (playerController != null)
@@ -109,7 +122,45 @@ public class DashSkill : MonoBehaviour
             playerController.enabled = true;
         }
 
+        if (playerHealth != null)
+        {
+            playerHealth.SetInvulnerable(false);
+        }
+
         IsDashing = false;
+    }
+
+    private void OnDisable()
+    {
+        if (IsDashing)
+        {
+            EndDash();
+        }
+    }
+
+    public void ReduceCooldown(float amount)
+    {
+        if (amount <= 0f)
+        {
+            return;
+        }
+
+        dashCooldown = Mathf.Max(0.3f, dashCooldown - amount);
+        cooldownRemaining = Mathf.Min(cooldownRemaining, dashCooldown);
+
+        Debug.Log($"Dash cooldown: {dashCooldown:F2}s");
+    }
+
+    public void AddDashDuration(float amount)
+    {
+        if (amount <= 0f)
+        {
+            return;
+        }
+
+        dashDuration = Mathf.Min(0.35f, dashDuration + amount);
+
+        Debug.Log($"Dash duration: {dashDuration:F2}s");
     }
 
     private Vector2 GetDashDirection()

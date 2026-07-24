@@ -15,6 +15,7 @@ namespace TopDownRoguelike.Gameplay.Upgrades
         [SerializeField] private PlayerHealth playerHealth;
         [SerializeField] private PlayerShooter playerShooter;
         [SerializeField] private UpgradePanelView upgradePanelView;
+        [SerializeField] private DashSkill dashSkill;
 
         [Header("Upgrade Pool")]
         [SerializeField] private List<UpgradeData> availableUpgrades = new List<UpgradeData>();
@@ -96,6 +97,14 @@ namespace TopDownRoguelike.Gameplay.Upgrades
 
                 case UpgradeType.ProjectileDamageUp:
                     playerShooter.AddProjectileDamage(upgradeData.IntValue);
+                    break;
+
+                case UpgradeType.DashCooldownDown:
+                    dashSkill.ReduceCooldown(upgradeData.FloatValue);
+                    break;
+
+                case UpgradeType.DashDurationUp:
+                    dashSkill.AddDashDuration(upgradeData.FloatValue);
                     break;
             }
 

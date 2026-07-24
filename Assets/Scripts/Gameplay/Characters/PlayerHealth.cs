@@ -11,8 +11,10 @@ namespace TopDownRoguelike.Gameplay.Characters
 
         private int currentHealth;
         private bool isDead;
+        [SerializeField] private bool isInvulnerable;
 
         public bool IsDead => isDead;
+        public bool IsInvulnerable => isInvulnerable;
 
         private void Awake()
         {
@@ -23,6 +25,12 @@ namespace TopDownRoguelike.Gameplay.Characters
         {
             if (isDead)
             {
+                return;
+            }
+
+            if (isInvulnerable)
+            {
+                Debug.Log("Player ignored damage while invulnerable.");
                 return;
             }
 
@@ -44,6 +52,11 @@ namespace TopDownRoguelike.Gameplay.Characters
             Debug.Log("Player died.");
 
             Time.timeScale = 0f;
+        }
+
+        public void SetInvulnerable(bool value)
+        {
+            isInvulnerable = value;
         }
 
         public void AddMaxHealth(int amount)

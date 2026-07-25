@@ -4,6 +4,7 @@ using TopDownRoguelike.Gameplay.Experience;
 using TopDownRoguelike.Gameplay.Weapons;
 using TopDownRoguelike.Gameplay.UI;
 using UnityEngine;
+using TopDownRoguelike.Gameplay.Core;
 
 namespace TopDownRoguelike.Gameplay.Upgrades
 {
@@ -17,6 +18,7 @@ namespace TopDownRoguelike.Gameplay.Upgrades
         [SerializeField] private UpgradePanelView upgradePanelView;
         [SerializeField] private DashSkill dashSkill;
         [SerializeField] private ShotgunSkill shotgunSkill;
+        [SerializeField] private GameManager gameManager;
 
         [Header("Upgrade Pool")]
         [SerializeField] private List<UpgradeData> availableUpgrades = new List<UpgradeData>();
@@ -61,7 +63,13 @@ namespace TopDownRoguelike.Gameplay.Upgrades
                 candidateUpgrades.RemoveAt(randomIndex);
             }
 
-            Time.timeScale = 0f;
+            if (gameManager == null)
+            {
+                Debug.LogError("UpgradeManager: GameManager is not assigned.");
+                return;
+            }
+
+            gameManager.PauseGame();
 
             upgradePanelView.Show(currentOptions, SelectUpgrade);
         }
@@ -72,7 +80,7 @@ namespace TopDownRoguelike.Gameplay.Upgrades
 
             upgradePanelView.Hide();
 
-            Time.timeScale = 1f;
+            gameManager.ResumeGame();
         }
 
         private void ApplyUpgrade(UpgradeData upgradeData)

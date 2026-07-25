@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using TopDownRoguelike.Gameplay.Combat;
 using UnityEngine;
+using System;
 
 namespace TopDownRoguelike.Gameplay.Characters
 {
@@ -11,6 +12,8 @@ namespace TopDownRoguelike.Gameplay.Characters
 
         private int currentHealth;
         private bool isDead;
+        public event Action OnDied;
+
         [SerializeField] private bool isInvulnerable;
 
         public bool IsDead => isDead;
@@ -46,12 +49,17 @@ namespace TopDownRoguelike.Gameplay.Characters
 
         private void Die()
         {
+            if (isDead)
+            {
+                return;
+            }
+
             isDead = true;
             currentHealth = 0;
 
             Debug.Log("Player died.");
 
-            Time.timeScale = 0f;
+            OnDied?.Invoke();
         }
 
         public void SetInvulnerable(bool value)

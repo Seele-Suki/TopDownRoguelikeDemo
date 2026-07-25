@@ -23,7 +23,7 @@ namespace TopDownRoguelike.Gameplay.Weapons
 
         private void Update()
         {
-            if (playerHealth != null && playerHealth.IsDead)
+            if (Time.timeScale <= 0f || (playerHealth != null && playerHealth.IsDead))
             {
                 return;
             }

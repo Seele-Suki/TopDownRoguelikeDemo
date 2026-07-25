@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TopDownRoguelike.Gameplay.Core;
 
 namespace TopDownRoguelike.Gameplay.Enemies
 {
@@ -10,11 +11,19 @@ namespace TopDownRoguelike.Gameplay.Enemies
         [SerializeField] private Transform player;
         [SerializeField] private float spawnInterval = 2f;
         [SerializeField] private float spawnDistance = 8f;
+        [SerializeField] private GameManager gameManager;
+
+        private bool canSpawn;
 
         private float nextSpawnTime;
 
         private void Update()
         {
+            if (!canSpawn)
+            {
+                return;
+            }
+
             if (enemyPrefabs == null || enemyPrefabs.Length == 0 || player == null)
             {
                 return;
@@ -37,6 +46,36 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
             GameObject enemyPrefab = enemyPrefabs[Random.Range(0, enemyPrefabs.Length)];
             Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
+        }
+
+        private void OnEnable()
+        {
+            if (gameManager == null)
+            {
+                Debug.LogError("EnemySpawner: GameManager is not assigned.");
+                return;
+            }
+
+            gameManager.OnStateChanged += HandleGameStateChanged;
+            HandleGameStateChanged(gameManager.CurrentState);
+        }
+
+        private void OnDisable()
+        {
+            if (gameManager != null)
+            {
+                gameManager.OnStateChanged -= HandleGameStateChanged;
+            }
+        }
+
+        private void HandleGameStateChanged(GameState gameState)
+        {
+            canSpawn = gameState == GameState.Playing;
+
+            if (canSpawn)
+            {
+                nextSpawnTime = Time.time + spawnInterval;
+            }
         }
     }
 }

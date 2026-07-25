@@ -11,6 +11,9 @@ namespace TopDownRoguelike.Gameplay.Upgrades
         FireRateUp,
         ProjectileDamageUp,
         DashCooldownDown,
-        DashDurationUp
+        DashDurationUp,
+        ShotgunProjectileCountUp,
+        ShotgunCooldownDown,
+        ShotgunPenetrationUp
     }
 }

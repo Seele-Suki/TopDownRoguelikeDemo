@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1774a16745e52f544ab7bd5f95f0e895, type: 3}
+  m_Name: ShotgunPenetrationUp
+  m_EditorClassIdentifier: 
+  upgradeName: "\u5F3A\u5316\u5F39\u82AF"
+  description: "\u9730\u5F39\u5B50\u5F39\u7684\u7A7F\u900F\u6B21\u6570\u589E\u52A0
+    1\u3002"
+  upgradeType: 8
+  floatValue: 0
+  intValue: 1

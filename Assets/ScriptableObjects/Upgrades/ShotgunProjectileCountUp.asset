@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1774a16745e52f544ab7bd5f95f0e895, type: 3}
+  m_Name: ShotgunProjectileCountUp
+  m_EditorClassIdentifier: 
+  upgradeName: "\u9730\u5F39\u6269\u5BB9"
+  description: "\u9730\u5F39\u6280\u80FD\u989D\u5916\u53D1\u5C04 2 \u9897\u5B50\u5F39\u3002"
+  upgradeType: 6
+  floatValue: 0
+  intValue: 2

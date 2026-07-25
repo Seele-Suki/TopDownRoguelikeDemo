@@ -14,18 +14,20 @@ namespace TopDownRoguelike.Gameplay.Weapons
         private ProjectilePool pool;
         private float remainingLifeTime;
         private bool isActive;
+        private int remainingPenetrations;
 
         public void SetPool(ProjectilePool projectilePool)
         {
             pool = projectilePool;
         }
 
-        public void Initialize(Vector2 direction, GameObject source, int projectileDamage)
+        public void Initialize(Vector2 direction,GameObject source,int projectileDamage, int penetrationCount)
         {
             moveDirection = direction.normalized;
             owner = source;
             damage = projectileDamage;
             remainingLifeTime = lifeTime;
+            remainingPenetrations = Mathf.Max(0, penetrationCount);
             isActive = true;
         }
 
@@ -47,17 +49,26 @@ namespace TopDownRoguelike.Gameplay.Weapons
 
         private void OnTriggerEnter2D(Collider2D other)
         {
-            if (other.gameObject == owner)
+            if (!isActive || other.gameObject == owner)
             {
                 return;
             }
 
             if (other.TryGetComponent(out IDamageable damageable))
             {
-                DamageInfo damageInfo = new DamageInfo(damage, moveDirection, owner);
+                DamageInfo damageInfo =
+                    new DamageInfo(damage, moveDirection, owner);
+
                 damageable.TakeDamage(damageInfo);
 
-                Release();
+                if (remainingPenetrations > 0)
+                {
+                    remainingPenetrations--;
+                }
+                else
+                {
+                    Release();
+                }
             }
         }
 
@@ -71,6 +82,7 @@ namespace TopDownRoguelike.Gameplay.Weapons
             isActive = false;
             owner = null;
             moveDirection = Vector2.zero;
+            remainingPenetrations = 0;
 
             if (pool != null)
             {

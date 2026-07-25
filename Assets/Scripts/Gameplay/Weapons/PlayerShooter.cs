@@ -54,7 +54,7 @@ namespace TopDownRoguelike.Gameplay.Weapons
             Vector2 fireDirection = (mouseWorldPosition - firePoint.position).normalized;
 
             Projectile projectile = projectilePool.GetProjectile(firePoint.position, Quaternion.identity);
-            projectile.Initialize(fireDirection, gameObject, projectileDamage);
+            projectile.Initialize(fireDirection, gameObject, projectileDamage,0);
         }
 
         public void AddFireRate(float amount)

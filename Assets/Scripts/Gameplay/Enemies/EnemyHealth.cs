@@ -8,12 +8,13 @@ namespace TopDownRoguelike.Gameplay.Enemies
     {
         [SerializeField] private EnemyData enemyData;
 
-        private int currentHealth;
+        [SerializeField] private int currentHealth;
+        [SerializeField] private float healthMultiplier = 1f;
         private bool isDead;
 
         private void Awake()
         {
-            currentHealth = enemyData != null ? enemyData.MaxHealth : 3;
+            ResetHealth();
         }
 
         public void TakeDamage(DamageInfo damageInfo)
@@ -50,6 +51,22 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
             int experienceReward = enemyData != null ? enemyData.ExperienceReward : 1;
             ExperienceOrbPool.Instance.GetOrb(transform.position, experienceReward);
+        }
+
+        public void ApplyDifficulty(float multiplier)
+        {
+            healthMultiplier = Mathf.Max(1f, multiplier);
+            ResetHealth();
+        }
+
+        private void ResetHealth()
+        {
+            int baseHealth =
+                enemyData != null ? enemyData.MaxHealth : 3;
+
+            currentHealth = Mathf.Max(
+                1,
+                Mathf.RoundToInt(baseHealth * healthMultiplier));
         }
     }
 }

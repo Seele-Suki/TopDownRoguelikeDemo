@@ -10,7 +10,7 @@ namespace TopDownRoguelike.Gameplay.Core
         [SerializeField] private PlayerHealth playerHealth;
 
         [Header("Run Configuration")]
-        [SerializeField] private float bossStartTime = 240f;
+        [SerializeField] private RunConfig runConfig;
 
         [Header("Runtime Debug")]
         [SerializeField] private GameState currentState;
@@ -27,6 +27,10 @@ namespace TopDownRoguelike.Gameplay.Core
 
         private void Awake()
         {
+            if (runConfig == null)
+            {
+                Debug.LogError("GameManager: RunConfig is not assigned.");
+            }
             Time.timeScale = 1f;
         }
 
@@ -49,8 +53,7 @@ namespace TopDownRoguelike.Gameplay.Core
 
             elapsedTime += Time.deltaTime;
 
-            if (currentState == GameState.Playing &&
-                elapsedTime >= bossStartTime)
+            if (currentState == GameState.Playing && runConfig != null && elapsedTime >= runConfig.BossStartTime)
             {
                 ChangeState(GameState.BossTransition);
                 OnBossTransitionRequested?.Invoke();

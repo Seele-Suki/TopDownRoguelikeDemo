@@ -8,6 +8,7 @@ namespace TopDownRoguelike.Gameplay.Enemies
     public class EnemyAttack : MonoBehaviour
     {
         [SerializeField] private EnemyData enemyData;
+        [SerializeField] private float attackCooldownMultiplier = 1f;
 
         private Transform target;
         private float nextAttackTime;
@@ -32,7 +33,8 @@ namespace TopDownRoguelike.Gameplay.Enemies
         {
             int attackDamage = enemyData != null ? enemyData.AttackDamage : 1;
             float attackRange = enemyData != null ? enemyData.AttackRange : 1.3f;
-            float attackCooldown = enemyData != null ? enemyData.AttackCooldown : 1f;
+            float baseAttackCooldown = enemyData != null ? enemyData.AttackCooldown : 1f;
+            float attackCooldown = baseAttackCooldown * attackCooldownMultiplier;
 
             if (target == null || Time.time < nextAttackTime)
             {
@@ -53,6 +55,12 @@ namespace TopDownRoguelike.Gameplay.Enemies
                 damageable.TakeDamage(damageInfo);
                 nextAttackTime = Time.time + attackCooldown;
             }
+        }
+
+        public void ApplyDifficulty(float cooldownMultiplier)
+        {
+            attackCooldownMultiplier =
+                Mathf.Clamp(cooldownMultiplier, 0.2f, 1f);
         }
     }
 }

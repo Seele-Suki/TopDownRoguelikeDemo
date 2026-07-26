@@ -7,9 +7,9 @@ namespace TopDownRoguelike.Gameplay.Enemies
 {
     public class EnemySpawner : MonoBehaviour
     {
-        [SerializeField] private GameObject[] enemyPrefabs;
+        [SerializeField] private EnemySpawnEntry[] enemyEntries;
         [SerializeField] private Transform player;
-        [SerializeField] private float spawnInterval = 2f;
+        [SerializeField] private RunConfig runConfig;
         [SerializeField] private float spawnDistance = 8f;
         [SerializeField] private GameManager gameManager;
 
@@ -17,14 +17,31 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
         private float nextSpawnTime;
 
+        private readonly List<GameObject> spawnedEnemies = new List<GameObject>();
+
+        [Header("Runtime Debug")]
+        [SerializeField] private float currentSpawnInterval;
+        [SerializeField] private int currentMaxAliveEnemies;
+        [SerializeField] private int currentAliveEnemies;
+        [SerializeField] private float currentHealthMultiplier;
+        [SerializeField] private float currentAttackCooldownMultiplier;
+
         private void Update()
         {
-            if (!canSpawn)
+            if (!canSpawn || runConfig == null)
             {
                 return;
             }
 
-            if (enemyPrefabs == null || enemyPrefabs.Length == 0 || player == null)
+            if (enemyEntries == null || enemyEntries.Length == 0 || player == null)
+            {
+                return;
+            }
+
+            RemoveDestroyedEnemies();
+            UpdateDifficultyValues();
+
+            if (currentAliveEnemies >= currentMaxAliveEnemies)
             {
                 return;
             }
@@ -35,7 +52,9 @@ namespace TopDownRoguelike.Gameplay.Enemies
             }
 
             SpawnEnemy();
-            nextSpawnTime = Time.time + spawnInterval;
+
+            nextSpawnTime =
+                Time.time + currentSpawnInterval;
         }
 
         private void SpawnEnemy()
@@ -44,15 +63,75 @@ namespace TopDownRoguelike.Gameplay.Enemies
             Vector3 spawnPosition = player.position + (Vector3)(randomDirection * spawnDistance);
             spawnPosition.z = 0f;
 
-            GameObject enemyPrefab = enemyPrefabs[Random.Range(0, enemyPrefabs.Length)];
-            Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
+            GameObject enemyPrefab = SelectEnemyPrefab();
+
+            if (enemyPrefab == null)
+            {
+                Debug.LogWarning(
+                    "EnemySpawner: No available enemy prefab.");
+
+                return;
+            }
+            GameObject spawnedEnemy = Instantiate(enemyPrefab,spawnPosition,Quaternion.identity);
+
+            if (spawnedEnemy.TryGetComponent(
+                    out EnemyHealth enemyHealth))
+            {
+                enemyHealth.ApplyDifficulty(
+                    currentHealthMultiplier);
+            }
+
+            if (spawnedEnemy.TryGetComponent(
+                    out EnemyAttack enemyAttack))
+            {
+                enemyAttack.ApplyDifficulty(
+                    currentAttackCooldownMultiplier);
+            }
+
+            spawnedEnemies.Add(spawnedEnemy);
+            currentAliveEnemies = spawnedEnemies.Count;
+        }
+
+        private void UpdateDifficultyValues()
+        {
+            float elapsedTime = gameManager.ElapsedTime;
+
+            currentSpawnInterval =
+                runConfig.GetSpawnInterval(elapsedTime);
+
+            currentMaxAliveEnemies =
+                runConfig.GetMaxAliveEnemies(elapsedTime);
+
+            currentAliveEnemies = spawnedEnemies.Count;
+
+            currentHealthMultiplier = 
+                runConfig.GetEnemyHealthMultiplier(elapsedTime);
+
+            currentAttackCooldownMultiplier =
+                runConfig.GetEnemyAttackCooldownMultiplier(elapsedTime);
+        }
+
+        private void RemoveDestroyedEnemies()
+        {
+            for (int i = spawnedEnemies.Count - 1; i >= 0; i--)
+            {
+                if (spawnedEnemies[i] == null)
+                {
+                    spawnedEnemies.RemoveAt(i);
+                }
+            }
+
+            currentAliveEnemies = spawnedEnemies.Count;
         }
 
         private void OnEnable()
         {
-            if (gameManager == null)
+            if (gameManager == null || runConfig == null)
             {
-                Debug.LogError("EnemySpawner: GameManager is not assigned.");
+                Debug.LogError(
+                    "EnemySpawner: GameManager or RunConfig is not assigned.");
+
+                canSpawn = false;
                 return;
             }
 
@@ -72,10 +151,49 @@ namespace TopDownRoguelike.Gameplay.Enemies
         {
             canSpawn = gameState == GameState.Playing;
 
-            if (canSpawn)
+            if (canSpawn && runConfig != null)
             {
-                nextSpawnTime = Time.time + spawnInterval;
+                UpdateDifficultyValues();
+
+                nextSpawnTime =
+                    Time.time + currentSpawnInterval;
             }
+        }
+
+        private GameObject SelectEnemyPrefab()
+        {
+            float runProgress =
+                runConfig.GetRunProgress(gameManager.ElapsedTime);
+
+            float totalWeight = 0f;
+
+            for (int i = 0; i < enemyEntries.Length; i++)
+            {
+                totalWeight +=
+                    enemyEntries[i].GetWeight(runProgress);
+            }
+
+            if (totalWeight <= 0f)
+            {
+                return null;
+            }
+
+            float randomValue = Random.Range(0f, totalWeight);
+
+            for (int i = 0; i < enemyEntries.Length; i++)
+            {
+                float weight =
+                    enemyEntries[i].GetWeight(runProgress);
+
+                if (randomValue < weight)
+                {
+                    return enemyEntries[i].EnemyPrefab;
+                }
+
+                randomValue -= weight;
+            }
+
+            return null;
         }
     }
 }

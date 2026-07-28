@@ -1,6 +1,7 @@
 using TopDownRoguelike.Gameplay.Combat;
 using TopDownRoguelike.Gameplay.Experience;
 using UnityEngine;
+using System;
 
 namespace TopDownRoguelike.Gameplay.Enemies
 {
@@ -11,6 +12,7 @@ namespace TopDownRoguelike.Gameplay.Enemies
         [SerializeField] private int currentHealth;
         [SerializeField] private float healthMultiplier = 1f;
         private bool isDead;
+        public event Action OnDied;
 
         private void Awake()
         {
@@ -36,7 +38,13 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
         private void Die()
         {
+            if (isDead)
+            {
+                return;
+            }
+
             isDead = true;
+            OnDied?.Invoke();
             DropExperience();
             Destroy(gameObject);
         }

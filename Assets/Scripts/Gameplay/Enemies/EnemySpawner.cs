@@ -79,6 +79,7 @@ namespace TopDownRoguelike.Gameplay.Enemies
             {
                 enemyHealth.ApplyDifficulty(
                     currentHealthMultiplier);
+                enemyHealth.OnDied += HandleEnemyDied;
             }
 
             if (spawnedEnemy.TryGetComponent(
@@ -158,6 +159,33 @@ namespace TopDownRoguelike.Gameplay.Enemies
                 nextSpawnTime =
                     Time.time + currentSpawnInterval;
             }
+        }
+
+        public void ClearSpawnedEnemies()
+        {
+            for (int i = spawnedEnemies.Count - 1;
+                 i >= 0;
+                 i--)
+            {
+                GameObject enemy =
+                    spawnedEnemies[i];
+
+                if (enemy != null)
+                {
+                    Destroy(enemy);
+                }
+            }
+
+            spawnedEnemies.Clear();
+            currentAliveEnemies = 0;
+
+            Debug.Log(
+                "EnemySpawner cleared all regular enemies.");
+        }
+
+        private void HandleEnemyDied()
+        {
+            gameManager.NotifyEnemyKilled();
         }
 
         private GameObject SelectEnemyPrefab()

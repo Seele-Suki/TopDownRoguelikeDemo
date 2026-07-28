@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using TopDownRoguelike.Gameplay.Characters;
+using UnityEngine.SceneManagement;
 
 namespace TopDownRoguelike.Gameplay.Core
 {
@@ -21,6 +22,8 @@ namespace TopDownRoguelike.Gameplay.Core
 
         public GameState CurrentState => currentState;
         public float ElapsedTime => elapsedTime;
+
+        public int KillCount { get; private set; }
 
         public event Action<GameState> OnStateChanged;
         public event Action OnBossTransitionRequested;
@@ -89,6 +92,22 @@ namespace TopDownRoguelike.Gameplay.Core
 
         public void NotifyDefeat() =>
             ChangeState(GameState.Defeat);
+
+        public void NotifyEnemyKilled()
+        {
+            if (currentState == GameState.Playing)
+            {
+                KillCount++;
+            }
+        }
+
+        public void RestartRun()
+        {
+            Time.timeScale = 1f;
+
+            SceneManager.LoadScene(
+                SceneManager.GetActiveScene().buildIndex);
+        }
 
         private void ChangeState(GameState newState)
         {

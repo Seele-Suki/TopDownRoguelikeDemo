@@ -13,6 +13,14 @@ namespace TopDownRoguelike.Gameplay.Enemies
         [SerializeField] private float spawnDistance = 8f;
         [SerializeField] private GameManager gameManager;
 
+        [SerializeField] private SpriteRenderer mapBounds;
+
+        [SerializeField, Min(0f)]
+        private float spawnPadding = 1f;
+
+        [SerializeField, Min(1)]
+        private int maxSpawnPositionAttempts = 16;
+
         private bool canSpawn;
 
         private float nextSpawnTime;
@@ -59,9 +67,10 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
         private void SpawnEnemy()
         {
-            Vector2 randomDirection = Random.insideUnitCircle.normalized;
-            Vector3 spawnPosition = player.position + (Vector3)(randomDirection * spawnDistance);
-            spawnPosition.z = 0f;
+            if (!TryGetSpawnPosition(out Vector3 spawnPosition))
+            {
+                return;
+            }
 
             GameObject enemyPrefab = SelectEnemyPrefab();
 
@@ -91,6 +100,78 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
             spawnedEnemies.Add(spawnedEnemy);
             currentAliveEnemies = spawnedEnemies.Count;
+        }
+
+        private bool TryGetSpawnPosition(out Vector3 spawnPosition)
+        {
+            spawnPosition = Vector3.zero;
+
+            if (mapBounds == null || player == null)
+            {
+                Debug.LogError(
+                    "EnemySpawner: Map bounds or player is missing.");
+
+                return false;
+            }
+
+            Bounds bounds = mapBounds.bounds;
+
+            float minX = bounds.min.x + spawnPadding;
+            float maxX = bounds.max.x - spawnPadding;
+            float minY = bounds.min.y + spawnPadding;
+            float maxY = bounds.max.y - spawnPadding;
+
+            for (int i = 0; i < maxSpawnPositionAttempts; i++)
+            {
+                Vector2 direction = Random.insideUnitCircle;
+
+                if (direction.sqrMagnitude < 0.0001f)
+                {
+                    continue;
+                }
+
+                direction.Normalize();
+
+                Vector3 candidate =
+                    player.position +
+                    (Vector3)(direction * spawnDistance);
+
+                candidate.z = 0f;
+
+                bool isInside =
+                    candidate.x >= minX &&
+                    candidate.x <= maxX &&
+                    candidate.y >= minY &&
+                    candidate.y <= maxY;
+
+                if (isInside)
+                {
+                    spawnPosition = candidate;
+                    return true;
+                }
+            }
+
+            Vector2 directionToCenter =
+                (Vector2)bounds.center -
+                (Vector2)player.position;
+
+            if (directionToCenter.sqrMagnitude < 0.0001f)
+            {
+                directionToCenter = Vector2.up;
+            }
+
+            spawnPosition =
+                player.position +
+                (Vector3)(directionToCenter.normalized * spawnDistance);
+
+            spawnPosition.x =
+                Mathf.Clamp(spawnPosition.x, minX, maxX);
+
+            spawnPosition.y =
+                Mathf.Clamp(spawnPosition.y, minY, maxY);
+
+            spawnPosition.z = 0f;
+            return true;
         }
 
         private void UpdateDifficultyValues()

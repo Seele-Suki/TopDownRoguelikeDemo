@@ -22,6 +22,11 @@ namespace TopDownRoguelike.Gameplay.Bosses
         [SerializeField, Min(1f)]
         private float spawnDistance = 6f;
 
+        [SerializeField] private SpriteRenderer mapBounds;
+
+        [SerializeField, Min(0f)]
+        private float spawnPadding = 2f;
+
         [Header("Runtime Debug")]
         [SerializeField] private bool encounterStarted;
         [SerializeField] private GameObject currentBoss;
@@ -34,7 +39,8 @@ namespace TopDownRoguelike.Gameplay.Bosses
                 enemySpawner == null ||
                 player == null ||
                 bossPrefab == null ||
-                bossHealthView == null)
+                bossHealthView == null ||
+                mapBounds == null)
             {
                 Debug.LogError(
                     "BossEncounterController: " +
@@ -92,11 +98,7 @@ namespace TopDownRoguelike.Gameplay.Bosses
                 yield break;
             }
 
-            Vector3 spawnPosition =
-                player.position +
-                Vector3.up * spawnDistance;
-
-            spawnPosition.z = 0f;
+            Vector3 spawnPosition = GetBossSpawnPosition();
 
             currentBoss = Instantiate(
                 bossPrefab,
@@ -121,6 +123,70 @@ namespace TopDownRoguelike.Gameplay.Bosses
             gameManager.StartBossBattle();
 
             Debug.Log("Boss battle started.");
+        }
+
+        private Vector3 GetBossSpawnPosition()
+        {
+            Bounds bounds = mapBounds.bounds;
+
+            float minX = bounds.min.x + spawnPadding;
+            float maxX = bounds.max.x - spawnPadding;
+            float minY = bounds.min.y + spawnPadding;
+            float maxY = bounds.max.y - spawnPadding;
+
+            Vector3 preferredPosition =
+                player.position +
+                Vector3.up * spawnDistance;
+
+            preferredPosition.z = 0f;
+
+            if (IsInsideSpawnBounds(
+                    preferredPosition,
+                    minX,
+                    maxX,
+                    minY,
+                    maxY))
+            {
+                return preferredPosition;
+            }
+
+            Vector2 directionToCenter =
+                (Vector2)bounds.center -
+                (Vector2)player.position;
+
+            if (directionToCenter.sqrMagnitude < 0.0001f)
+            {
+                directionToCenter = Vector2.up;
+            }
+
+            Vector3 fallbackPosition =
+                player.position +
+                (Vector3)(
+                    directionToCenter.normalized *
+                    spawnDistance);
+
+            fallbackPosition.x =
+                Mathf.Clamp(fallbackPosition.x, minX, maxX);
+
+            fallbackPosition.y =
+                Mathf.Clamp(fallbackPosition.y, minY, maxY);
+
+            fallbackPosition.z = 0f;
+
+            return fallbackPosition;
+        }
+
+        private static bool IsInsideSpawnBounds(
+            Vector3 position,
+            float minX,
+            float maxX,
+            float minY,
+            float maxY)
+        {
+            return position.x >= minX &&
+                   position.x <= maxX &&
+                   position.y >= minY &&
+                   position.y <= maxY;
         }
 
         private void HandleBossDied()

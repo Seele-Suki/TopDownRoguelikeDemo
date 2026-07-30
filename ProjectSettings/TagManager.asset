@@ -41,3 +41,24 @@ TagManager:
   - name: Default
     uniqueID: 0
     locked: 0
+  - name: Background
+    uniqueID: 1416089119
+    locked: 0
+  - name: Ground
+    uniqueID: 990485309
+    locked: 0
+  - name: Props
+    uniqueID: 2152075127
+    locked: 0
+  - name: Characters
+    uniqueID: 896820599
+    locked: 0
+  - name: Projectiles
+    uniqueID: 4286627815
+    locked: 0
+  - name: VFX
+    uniqueID: 2209273061
+    locked: 0
+  - name: WorldUI
+    uniqueID: 857416289
+    locked: 0

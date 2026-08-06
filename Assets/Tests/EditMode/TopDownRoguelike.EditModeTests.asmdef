@@ -1,0 +1,21 @@
+{
+    "name": "TopDownRoguelike.EditModeTests",
+    "rootNamespace": "TopDownRoguelike.Tests.EditMode",
+    "references": [
+        "GUID:b247b76eae9d74a438929f0400a40ae9"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "noEngineReferences": false
+}

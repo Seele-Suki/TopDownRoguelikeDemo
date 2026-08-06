@@ -11,6 +11,8 @@ namespace TopDownRoguelike.Infrastructure
 
         public void LoadMainMenu()
         {
+            Time.timeScale = 1f;
+            GameSession.Reset();
             LoadScene(mainMenuSceneName);
         }
 

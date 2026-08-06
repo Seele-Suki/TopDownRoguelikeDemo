@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using TopDownRoguelike.Gameplay.Characters;
+using TopDownRoguelike.Infrastructure;
 using UnityEngine.SceneManagement;
 
 namespace TopDownRoguelike.Gameplay.Core
@@ -16,6 +17,9 @@ namespace TopDownRoguelike.Gameplay.Core
         [Header("Runtime Debug")]
         [SerializeField] private GameState currentState;
         [SerializeField] private float elapsedTime;
+        [SerializeField] private GameMode sessionMode;
+        [SerializeField] private CharacterId selectedCharacter;
+        [SerializeField] private DifficultyId selectedDifficulty;
 
         private bool initialized;
         private GameState stateBeforePause;
@@ -30,10 +34,13 @@ namespace TopDownRoguelike.Gameplay.Core
 
         private void Awake()
         {
+            ReadSessionConfiguration();
+
             if (runConfig == null)
             {
                 Debug.LogError("GameManager: RunConfig is not assigned.");
             }
+
             Time.timeScale = 1f;
         }
 
@@ -107,6 +114,26 @@ namespace TopDownRoguelike.Gameplay.Core
 
             SceneManager.LoadScene(
                 SceneManager.GetActiveScene().buildIndex);
+        }
+
+        private void ReadSessionConfiguration()
+        {
+            sessionMode = GameSession.CurrentMode;
+            selectedCharacter = GameSession.SelectedCharacter;
+            selectedDifficulty = GameSession.SelectedDifficulty;
+
+            Debug.Log(
+                $"Game session loaded: Mode={sessionMode}, " +
+                $"Character={selectedCharacter}, " +
+                $"Difficulty={selectedDifficulty}");
+
+            if (sessionMode == GameMode.SinglePlayer &&
+                !GameSession.HasCompleteSelection)
+            {
+                Debug.LogWarning(
+                    "GameManager: Single-player session has no complete " +
+                    "selection. Existing gameplay defaults will be used.");
+            }
         }
 
         private void ChangeState(GameState newState)

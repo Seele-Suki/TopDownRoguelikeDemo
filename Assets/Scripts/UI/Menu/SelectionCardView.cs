@@ -22,10 +22,13 @@ namespace TopDownRoguelike.Menu.UI
         private Color unavailableColor =
             new Color32(110, 110, 110, 255);
 
-        private bool isAvailable = true;
+        [SerializeField] private bool isAvailable = true;
+        [SerializeField] private bool isInteractable = true;
+
         private bool isSelected;
 
         public bool IsAvailable => isAvailable;
+        public bool IsInteractable => isInteractable;
         public bool IsSelected => isSelected;
 
         private void Awake()
@@ -48,6 +51,12 @@ namespace TopDownRoguelike.Menu.UI
                 isSelected = false;
             }
 
+            RefreshVisual();
+        }
+
+        public void SetInteractable(bool interactable)
+        {
+            isInteractable = interactable;
             RefreshVisual();
         }
 
@@ -82,7 +91,8 @@ namespace TopDownRoguelike.Menu.UI
 
             if (button != null)
             {
-                button.interactable = isAvailable;
+                button.interactable =
+                    isAvailable && isInteractable;
             }
 
             if (unavailableLabel != null)

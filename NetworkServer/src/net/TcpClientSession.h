@@ -7,6 +7,7 @@
 #include "room/PlayerIdAllocator.h"
 #include "room/SessionTokenGenerator.h"
 #include "protocol/UdpMessageHeader.h"
+#include "protocol/UdpSequenceTracker.h"
 #include "net/UdpEndpoint.h"
 
 #include <optional>
@@ -80,6 +81,11 @@ namespace tdr::net
         ) const noexcept;
 
         [[nodiscard]]
+        bool AcceptUdpSequence(
+            std::uint32_t sequence
+        ) noexcept;
+
+        [[nodiscard]]
         const std::string& Nickname() const noexcept;
 
         [[nodiscard]]
@@ -107,6 +113,8 @@ namespace tdr::net
         > sessionTokenBytes_{};
 
         std::optional<UdpEndpoint> udpEndpoint_;
+        tdr::protocol::UdpSequenceTracker
+            udpSequenceTracker_;
 
         std::vector<std::vector<std::uint8_t>>
             outgoingPackets_;

@@ -32,6 +32,8 @@ add_executable(NetworkServer
     src/net/UdpEndpoint.h
     src/net/UdpBindHandler.h
     src/net/UdpBindHandler.cpp
+    src/net/UdpPingHandler.h
+    src/net/UdpPingHandler.cpp
 
     src/protocol/MessageType.h
     src/protocol/MessageHeader.h
@@ -43,6 +45,9 @@ add_executable(NetworkServer
     src/protocol/UdpPacketCodec.cpp
     src/protocol/SessionTokenCodec.h
     src/protocol/SessionTokenCodec.cpp
+    src/protocol/UdpBindingCredentialsCodec.h
+    src/protocol/UdpBindingCredentialsCodec.cpp
+    src/protocol/UdpSequenceTracker.h
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -476,6 +481,12 @@ add_executable(ServerLoopTests
     src/net/TcpConnection.cpp
     src/net/ServerLoop.h
     src/net/ServerLoop.cpp
+    src/net/UdpSocket.h
+    src/net/UdpSocket.cpp
+    src/net/UdpBindHandler.h
+    src/net/UdpBindHandler.cpp
+    src/net/UdpPingHandler.h
+    src/net/UdpPingHandler.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -494,6 +505,12 @@ add_executable(ServerLoopTests
     src/protocol/MessageHeader.h
     src/protocol/NetworkByteOrder.h
     src/protocol/SessionTokenCodec.cpp
+    src/protocol/UdpBindingCredentialsCodec.h
+    src/protocol/UdpBindingCredentialsCodec.cpp
+    src/protocol/UdpSequenceTracker.h
+    src/protocol/UdpMessageHeader.h
+    src/protocol/UdpPacketCodec.h
+    src/protocol/UdpPacketCodec.cpp
 )
 
 target_include_directories(ServerLoopTests
@@ -585,6 +602,9 @@ add_executable(UdpProtocolTests
     src/protocol/UdpPacketCodec.h
     src/protocol/UdpPacketCodec.cpp
     src/protocol/NetworkByteOrder.h
+    src/protocol/UdpBindingCredentialsCodec.h
+    src/protocol/UdpBindingCredentialsCodec.cpp
+    src/protocol/UdpSequenceTracker.h
 )
 
 target_include_directories(UdpProtocolTests
@@ -608,6 +628,67 @@ endif()
 add_test(
     NAME UdpProtocolTests
     COMMAND UdpProtocolTests
+)
+
+add_executable(UdpPingHandlerTests
+    tests/UdpPingHandlerTests.cpp
+
+    src/net/ServerCoordinator.h
+    src/net/ServerCoordinator.cpp
+    src/net/TcpClientSession.h
+    src/net/TcpClientSession.cpp
+    src/net/TcpConnection.h
+    src/net/TcpConnection.cpp
+    src/net/SocketRuntime.h
+    src/net/SocketRuntime.cpp
+    src/net/UdpPingHandler.h
+    src/net/UdpPingHandler.cpp
+
+    src/room/ClientState.h
+    src/room/ClientState.cpp
+    src/room/Room.h
+    src/room/Room.cpp
+    src/room/RoomManager.h
+    src/room/RoomManager.cpp
+    src/room/PlayerIdAllocator.h
+    src/room/PlayerIdAllocator.cpp
+    src/room/SessionTokenGenerator.h
+    src/room/SessionTokenGenerator.cpp
+
+    src/protocol/PacketCodec.h
+    src/protocol/PacketCodec.cpp
+    src/protocol/MessageType.h
+    src/protocol/MessageHeader.h
+    src/protocol/NetworkByteOrder.h
+    src/protocol/SessionTokenCodec.cpp
+    src/protocol/UdpMessageHeader.h
+    src/protocol/UdpPacketCodec.h
+    src/protocol/UdpPacketCodec.cpp
+    src/protocol/UdpSequenceTracker.h
+)
+
+target_include_directories(UdpPingHandlerTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(UdpPingHandlerTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(UdpPingHandlerTests
+        PRIVATE
+            ws2_32
+            bcrypt
+    )
+endif()
+
+add_test(
+    NAME UdpPingHandlerTests
+    COMMAND UdpPingHandlerTests
 )
 
 add_executable(SessionTokenCodecTests

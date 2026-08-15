@@ -2,6 +2,7 @@
 #include "net/ServerLoop.h"
 #include "net/SocketRuntime.h"
 #include "net/TcpListener.h"
+#include "net/UdpSocket.h"
 
 #include <conio.h>
 #include <chrono>
@@ -134,10 +135,20 @@ int main(
                     listener.BoundPort())
             );
 
+            tdr::net::UdpSocket udpSocket;
+            udpSocket.Bind(tcpPort);
+
+            LogInfo(
+                "UDP server is listening on [::]:"
+                + std::to_string(
+                    udpSocket.BoundPort())
+            );
+
             tdr::net::ServerCoordinator coordinator;
 
             tdr::net::ServerLoop serverLoop(
                 listener,
+                udpSocket,
                 coordinator
             );
 

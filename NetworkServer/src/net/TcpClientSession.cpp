@@ -148,6 +148,15 @@ namespace tdr::net
         return token == sessionTokenBytes_;
     }
 
+    bool TcpClientSession::AcceptUdpSequence(
+        const std::uint32_t sequence
+    ) noexcept
+    {
+        return udpSequenceTracker_.Accept(
+            sequence
+        );
+    }
+
     const std::string&
         TcpClientSession::Nickname() const noexcept
     {

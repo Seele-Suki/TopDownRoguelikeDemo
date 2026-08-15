@@ -2,11 +2,16 @@
 #include "net/ServerLoop.h"
 #include "net/SocketRuntime.h"
 #include "net/TcpListener.h"
+#include "net/UdpSocket.h"
+#include "protocol/MessageHeader.h"
 #include "protocol/PacketCodec.h"
+#include "protocol/UdpBindingCredentialsCodec.h"
+#include "protocol/UdpPacketCodec.h"
 
 #include <WinSock2.h>
 #include <WS2tcpip.h>
 
+#include <array>
 #include <chrono>
 #include <exception>
 #include <iostream>
@@ -170,6 +175,80 @@ namespace
         return client;
     }
 
+    sockaddr_in6 CreateUdpLoopbackAddress(
+        const unsigned short port
+    )
+    {
+        sockaddr_in6 address{};
+        address.sin6_family = AF_INET6;
+        address.sin6_addr = in6addr_loopback;
+        address.sin6_port = ::htons(port);
+
+        return address;
+    }
+
+    void SetReceiveTimeout(
+        const SOCKET socket
+    )
+    {
+        const DWORD timeoutMilliseconds = 1000U;
+
+        const int result =
+            ::setsockopt(
+                socket,
+                SOL_SOCKET,
+                SO_RCVTIMEO,
+                reinterpret_cast<const char*>(
+                    &timeoutMilliseconds),
+                sizeof(timeoutMilliseconds)
+            );
+
+        if (result == SOCKET_ERROR)
+        {
+            throw std::runtime_error(
+                "Failed to set UDP receive timeout."
+            );
+        }
+    }
+
+    bool IsReadableWithin(
+        const SOCKET socket,
+        const std::chrono::milliseconds timeout
+    )
+    {
+        fd_set readSet;
+        FD_ZERO(&readSet);
+        FD_SET(socket, &readSet);
+
+        timeval timeoutValue{};
+        timeoutValue.tv_sec =
+            static_cast<long>(
+                timeout.count() / 1000
+            );
+        timeoutValue.tv_usec =
+            static_cast<long>(
+                (timeout.count() % 1000) * 1000
+            );
+
+        const int result =
+            ::select(
+                0,
+                &readSet,
+                nullptr,
+                nullptr,
+                &timeoutValue
+            );
+
+        if (result == SOCKET_ERROR)
+        {
+            throw std::runtime_error(
+                "UDP test select failed."
+            );
+        }
+
+        return result > 0;
+    }
+
     void SendAll(
         const SOCKET socket,
         const std::vector<std::uint8_t>& bytes
@@ -292,10 +371,14 @@ int main()
         tdr::net::TcpListener listener;
         listener.BindAndListen(0);
 
+        tdr::net::UdpSocket udpSocket;
+        udpSocket.Bind(0);
+
         tdr::net::ServerCoordinator coordinator;
 
         tdr::net::ServerLoop serverLoop(
             listener,
+            udpSocket,
             coordinator
         );
 
@@ -326,6 +409,41 @@ int main()
 
             return 1;
         }
+
+        const auto serverHelloBytes =
+            ReceiveWithTimeout(
+                client.NativeHandle(),
+                tdr::protocol::kMessageHeaderSize
+                + tdr::protocol::
+                    kUdpBindingCredentialsSize
+            );
+
+        tdr::protocol::PacketCodec serverHelloCodec;
+        serverHelloCodec.Append(
+            serverHelloBytes.data(),
+            serverHelloBytes.size()
+        );
+
+        const auto serverHelloPackets =
+            serverHelloCodec.DecodeAvailable();
+
+        if (serverHelloPackets.size() != 1
+            || serverHelloPackets.front().type
+                != tdr::protocol::MessageType::ServerHello)
+        {
+            std::cerr
+                << "[FAIL] Server did not send exactly one "
+                << "ServerHello after accepting TCP."
+                << std::endl;
+
+            return 1;
+        }
+
+        const auto udpCredentials =
+            tdr::protocol::UdpBindingCredentialsCodec::Decode(
+                serverHelloPackets.front().payload.data(),
+                serverHelloPackets.front().payload.size()
+            );
 
         const auto nicknamePacket =
             tdr::protocol::PacketCodec::Encode(
@@ -443,6 +561,306 @@ int main()
             return 1;
         }
 
+        const auto& room =
+            coordinator.Rooms().FindRoom(
+                "ROOM-1"
+            );
+
+        const std::uint32_t playerId =
+            udpCredentials.playerId;
+
+        if (room.PlayerAt(0).playerId != playerId)
+        {
+            std::cerr
+                << "[FAIL] ServerHello contained the wrong "
+                << "player ID."
+                << std::endl;
+
+            return 1;
+        }
+
+        auto& session =
+            coordinator.FindSession(
+                playerId
+            );
+
+        tdr::net::UdpSocket udpClient;
+        udpClient.Bind(0);
+        SetReceiveTimeout(
+            udpClient.NativeHandle()
+        );
+
+        tdr::protocol::UdpMessageHeader bindHeader{};
+        bindHeader.type =
+            tdr::protocol::MessageType::UdpBindRequest;
+        bindHeader.sessionToken =
+            udpCredentials.sessionToken;
+        bindHeader.playerId = playerId;
+        bindHeader.sequence = 41U;
+
+        const auto bindRequest =
+            tdr::protocol::UdpPacketCodec::Encode(
+                bindHeader,
+                {}
+            );
+
+        const sockaddr_in6 udpServerAddress =
+            CreateUdpLoopbackAddress(
+                udpSocket.BoundPort()
+            );
+
+        static_cast<void>(
+            udpClient.SendTo(
+                bindRequest.data(),
+                bindRequest.size(),
+                udpServerAddress
+            )
+        );
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000)
+        );
+
+        std::array<std::uint8_t, 256>
+            bindResponseBuffer{};
+        sockaddr_in6 bindResponseSource{};
+
+        const std::size_t bindResponseSize =
+            udpClient.ReceiveFrom(
+                bindResponseBuffer.data(),
+                bindResponseBuffer.size(),
+                bindResponseSource
+            );
+
+        const auto bindResponse =
+            tdr::protocol::UdpPacketCodec::Decode(
+                bindResponseBuffer.data(),
+                bindResponseSize
+            );
+
+        const sockaddr_in6 expectedClientAddress =
+            CreateUdpLoopbackAddress(
+                udpClient.BoundPort()
+            );
+
+        if (bindResponse.header.type
+                != tdr::protocol::MessageType::UdpBindAccepted
+            || bindResponse.header.sessionToken
+                != bindHeader.sessionToken
+            || bindResponse.header.playerId
+                != bindHeader.playerId
+            || bindResponse.header.sequence
+                != bindHeader.sequence
+            || !bindResponse.payload.empty()
+            || !session.MatchesUdpEndpoint(
+                expectedClientAddress))
+        {
+            std::cerr
+                << "[FAIL] Server loop did not complete "
+                << "the UDP binding handshake."
+                << std::endl;
+
+            return 1;
+        }
+
+        auto pingHeader = bindHeader;
+        pingHeader.type =
+            tdr::protocol::MessageType::UdpPing;
+        pingHeader.sequence = 42U;
+
+        const auto pingRequest =
+            tdr::protocol::UdpPacketCodec::Encode(
+                pingHeader,
+                {}
+            );
+
+        static_cast<void>(
+            udpClient.SendTo(
+                pingRequest.data(),
+                pingRequest.size(),
+                udpServerAddress
+            )
+        );
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000)
+        );
+
+        const std::size_t pongSize =
+            udpClient.ReceiveFrom(
+                bindResponseBuffer.data(),
+                bindResponseBuffer.size(),
+                bindResponseSource
+            );
+
+        const auto pong =
+            tdr::protocol::UdpPacketCodec::Decode(
+                bindResponseBuffer.data(),
+                pongSize
+            );
+
+        if (pong.header.type
+                != tdr::protocol::MessageType::UdpPong
+            || pong.header.sessionToken
+                != pingHeader.sessionToken
+            || pong.header.playerId
+                != pingHeader.playerId
+            || pong.header.sequence
+                != pingHeader.sequence
+            || !pong.payload.empty())
+        {
+            std::cerr
+                << "[FAIL] Server loop did not route "
+                << "UDP Ping to Pong."
+                << std::endl;
+
+            return 1;
+        }
+
+        const auto expectRejectedUdpRequest =
+            [&serverLoop, &udpServerAddress](
+                tdr::net::UdpSocket& sender,
+                const tdr::protocol::UdpMessageHeader& header,
+                const std::vector<std::uint8_t>& payload,
+                const char* const description
+            )
+            {
+                const auto request =
+                    tdr::protocol::UdpPacketCodec::Encode(
+                        header,
+                        payload
+                    );
+
+                static_cast<void>(
+                    sender.SendTo(
+                        request.data(),
+                        request.size(),
+                        udpServerAddress
+                    )
+                );
+
+                try
+                {
+                    serverLoop.PollOnce(
+                        std::chrono::milliseconds(1000)
+                    );
+                }
+                catch (const std::exception& exception)
+                {
+                    std::cerr
+                        << "[FAIL] Rejected UDP "
+                        << description
+                        << " escaped the server loop: "
+                        << exception.what()
+                        << std::endl;
+
+                    return false;
+                }
+
+                if (IsReadableWithin(
+                        sender.NativeHandle(),
+                        std::chrono::milliseconds(100)))
+                {
+                    std::cerr
+                        << "[FAIL] Server responded to "
+                        << description
+                        << "."
+                        << std::endl;
+
+                    return false;
+                }
+
+                return true;
+            };
+
+        auto invalidTokenHeader = bindHeader;
+        invalidTokenHeader.sessionToken[0] ^= 0xFFU;
+        invalidTokenHeader.sequence = 43U;
+
+        if (!expectRejectedUdpRequest(
+                udpClient,
+                invalidTokenHeader,
+                {},
+                "an invalid session token"))
+        {
+            return 1;
+        }
+
+        if (!expectRejectedUdpRequest(
+                udpClient,
+                bindHeader,
+                {},
+                "a duplicate UDP sequence"))
+        {
+            return 1;
+        }
+
+        auto expiredSequenceHeader = bindHeader;
+        expiredSequenceHeader.sequence = 40U;
+
+        if (!expectRejectedUdpRequest(
+                udpClient,
+                expiredSequenceHeader,
+                {},
+                "an expired UDP sequence"))
+        {
+            return 1;
+        }
+
+        auto unknownPlayerHeader = bindHeader;
+        unknownPlayerHeader.playerId += 1000U;
+        unknownPlayerHeader.sequence = 43U;
+
+        if (!expectRejectedUdpRequest(
+                udpClient,
+                unknownPlayerHeader,
+                {},
+                "an unknown player"))
+        {
+            return 1;
+        }
+
+        auto nonEmptyPayloadHeader = bindHeader;
+        nonEmptyPayloadHeader.sequence = 44U;
+
+        if (!expectRejectedUdpRequest(
+                udpClient,
+                nonEmptyPayloadHeader,
+                { 0x01U },
+                "a non-empty BindRequest payload"))
+        {
+            return 1;
+        }
+
+        tdr::net::UdpSocket replacementUdpClient;
+        replacementUdpClient.Bind(0);
+        SetReceiveTimeout(
+            replacementUdpClient.NativeHandle()
+        );
+
+        auto replacementAddressHeader = bindHeader;
+        replacementAddressHeader.sequence = 45U;
+
+        if (!expectRejectedUdpRequest(
+                replacementUdpClient,
+                replacementAddressHeader,
+                {},
+                "a replacement source address"))
+        {
+            return 1;
+        }
+
+        if (!session.MatchesUdpEndpoint(
+            expectedClientAddress))
+        {
+            std::cerr
+                << "[FAIL] Rejected UDP data changed "
+                << "the existing endpoint binding."
+                << std::endl;
+
+            return 1;
+        }
+
         client.Close();
 
         serverLoop.PollOnce(
@@ -540,8 +958,8 @@ int main()
         }
 
         std::cout
-            << "[PASS] Server loop handles TCP data, "
-            << "disconnects, and controlled shutdown."
+            << "[PASS] Server loop handles TCP data, UDP "
+            << "binding, disconnects, and controlled shutdown."
             << std::endl;
 
         return 0;

@@ -1,11 +1,12 @@
-#include "net/UdpBindHandler.h"
+#include "net/UdpPingHandler.h"
+
 #include "protocol/UdpPacketCodec.h"
 
 #include <stdexcept>
 
 namespace tdr::net
 {
-    UdpBindHandler::UdpBindHandler(
+    UdpPingHandler::UdpPingHandler(
         ServerCoordinator& coordinator
     ) noexcept
         : coordinator_(coordinator)
@@ -13,7 +14,7 @@ namespace tdr::net
     }
 
     std::vector<std::uint8_t>
-        UdpBindHandler::Handle(
+        UdpPingHandler::Handle(
             const std::uint8_t* const data,
             const std::size_t size,
             const sockaddr_in6& sourceAddress
@@ -25,24 +26,43 @@ namespace tdr::net
                 size
             );
 
+        if (request.header.type
+                != tdr::protocol::MessageType::UdpPing)
+        {
+            throw std::invalid_argument(
+                "Only UdpPing can be handled by "
+                "UdpPingHandler."
+            );
+        }
+
         if (!request.payload.empty())
         {
             throw std::invalid_argument(
-                "UDP BindRequest payload must be empty."
+                "UDP Ping payload must be empty."
             );
         }
 
         auto& session =
-            coordinator_.BindUdpEndpoint(
-                request.header,
-                sourceAddress
+            coordinator_.FindSessionForUdp(
+                request.header
             );
+
+        if (!session.HasUdpEndpoint()
+            || !session.MatchesUdpEndpoint(
+                sourceAddress))
+        {
+            throw std::invalid_argument(
+                "UDP Ping source is not bound to "
+                "the requested session."
+            );
+        }
 
         if (!session.AcceptUdpSequence(
             request.header.sequence))
         {
             throw std::invalid_argument(
-                "UDP sequence is duplicate or expired."
+                "UDP Ping sequence is duplicate "
+                "or expired."
             );
         }
 
@@ -50,7 +70,7 @@ namespace tdr::net
             request.header;
 
         responseHeader.type =
-            tdr::protocol::MessageType::UdpBindAccepted;
+            tdr::protocol::MessageType::UdpPong;
 
         return tdr::protocol::UdpPacketCodec::Encode(
             responseHeader,

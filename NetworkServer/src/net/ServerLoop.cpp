@@ -3,20 +3,28 @@
 #include "net/ServerCoordinator.h"
 #include "net/TcpConnection.h"
 #include "net/TcpListener.h"
+#include "net/UdpSocket.h"
+#include "protocol/UdpBindingCredentialsCodec.h"
+#include "protocol/UdpPacketCodec.h"
 
 #include <stdexcept>
 #include <utility>
 #include <array>
 #include <cstdint>
+#include <vector>
 
 namespace tdr::net
 {
     ServerLoop::ServerLoop(
         TcpListener& listener,
+        UdpSocket& udpSocket,
         ServerCoordinator& coordinator
     )
         : listener_(listener),
-        coordinator_(coordinator)
+        udpSocket_(udpSocket),
+        coordinator_(coordinator),
+        udpBindHandler_(coordinator),
+        udpPingHandler_(coordinator)
     {
         if (!listener_.IsListening())
         {
@@ -26,8 +34,19 @@ namespace tdr::net
             );
         }
 
+        if (!udpSocket_.IsBound())
+        {
+            throw std::invalid_argument(
+                "Server loop requires a bound UDP socket."
+            );
+        }
+
         selectLoop_.AddSocket(
             listener_.NativeHandle()
+        );
+
+        selectLoop_.AddSocket(
+            udpSocket_.NativeHandle()
         );
     }
 
@@ -56,6 +75,80 @@ namespace tdr::net
         result.ReadableSockets())
         {
             if (readableSocket
+                == udpSocket_.NativeHandle())
+            {
+                std::array<std::uint8_t, 4096>
+                    receiveBuffer{};
+                sockaddr_in6 sourceAddress{};
+
+                const std::size_t receivedByteCount =
+                    udpSocket_.ReceiveFrom(
+                        receiveBuffer.data(),
+                        receiveBuffer.size(),
+                        sourceAddress
+                    );
+
+                std::vector<std::uint8_t> response;
+
+                try
+                {
+                    const auto packet =
+                        tdr::protocol::UdpPacketCodec::Decode(
+                            receiveBuffer.data(),
+                            receivedByteCount
+                        );
+
+                    switch (packet.header.type)
+                    {
+                    case tdr::protocol::MessageType::UdpBindRequest:
+                        response =
+                            udpBindHandler_.Handle(
+                                receiveBuffer.data(),
+                                receivedByteCount,
+                                sourceAddress
+                            );
+                        break;
+
+                    case tdr::protocol::MessageType::UdpPing:
+                        response =
+                            udpPingHandler_.Handle(
+                                receiveBuffer.data(),
+                                receivedByteCount,
+                                sourceAddress
+                            );
+                        break;
+
+                    default:
+                        throw std::invalid_argument(
+                            "Unsupported UDP message type."
+                        );
+                    }
+                }
+                catch (const std::invalid_argument&)
+                {
+                    continue;
+                }
+                catch (const std::out_of_range&)
+                {
+                    continue;
+                }
+                catch (const std::runtime_error&)
+                {
+                    continue;
+                }
+
+                static_cast<void>(
+                    udpSocket_.SendTo(
+                        response.data(),
+                        response.size(),
+                        sourceAddress
+                    )
+                );
+
+                continue;
+            }
+
+            if (readableSocket
                 == listener_.NativeHandle())
             {
                 TcpConnection connection =
@@ -69,10 +162,26 @@ namespace tdr::net
                         std::move(connection)
                     );
 
-                (void)session;
-
                 try
                 {
+                    const tdr::protocol::
+                        UdpBindingCredentials credentials{
+                            session.PlayerId(),
+                            session.SessionTokenBytes()
+                        };
+
+                    const auto credentialsPayload =
+                        tdr::protocol::
+                        UdpBindingCredentialsCodec::Encode(
+                            credentials
+                        );
+
+                    coordinator_.SendPacketToPlayer(
+                        session.PlayerId(),
+                        tdr::protocol::MessageType::ServerHello,
+                        credentialsPayload
+                    );
+
                     selectLoop_.AddSocket(
                         clientSocket
                     );

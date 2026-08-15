@@ -1,6 +1,8 @@
 #pragma once
 
 #include "net/SelectLoop.h"
+#include "net/UdpBindHandler.h"
+#include "net/UdpPingHandler.h"
 
 #include <chrono>
 #include <functional>
@@ -9,12 +11,14 @@ namespace tdr::net
 {
     class ServerCoordinator;
     class TcpListener;
+    class UdpSocket;
 
     class ServerLoop final
     {
     public:
         ServerLoop(
             TcpListener& listener,
+            UdpSocket& udpSocket,
             ServerCoordinator& coordinator
         );
 
@@ -29,7 +33,10 @@ namespace tdr::net
 
     private:
         TcpListener& listener_;
+        UdpSocket& udpSocket_;
         ServerCoordinator& coordinator_;
+        UdpBindHandler udpBindHandler_;
+        UdpPingHandler udpPingHandler_;
         SelectLoop selectLoop_;
     };
 }

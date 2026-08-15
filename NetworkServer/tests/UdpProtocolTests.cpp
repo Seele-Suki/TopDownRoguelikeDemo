@@ -1,5 +1,7 @@
 #include "protocol/MessageType.h"
+#include "protocol/UdpBindingCredentialsCodec.h"
 #include "protocol/UdpMessageHeader.h"
+#include "protocol/UdpSequenceTracker.h"
 #include "protocol/UdpPacketCodec.h"
 
 #include <cstddef>
@@ -107,6 +109,133 @@ namespace
 
         Require(header.playerId == 0U, "Player ID must default to zero.");
         Require(header.sequence == 0U, "Sequence must default to zero.");
+    }
+
+    void UdpBindingCredentialsUseStableWireLayout()
+    {
+        using namespace tdr::protocol;
+
+        UdpBindingCredentials credentials{};
+        credentials.playerId = 0x01020304U;
+
+        for (std::size_t index = 0;
+            index < credentials.sessionToken.size();
+            ++index)
+        {
+            credentials.sessionToken[index] =
+                static_cast<std::uint8_t>(index);
+        }
+
+        const auto encoded =
+            UdpBindingCredentialsCodec::Encode(
+                credentials
+            );
+
+        Require(
+            encoded.size() == kUdpBindingCredentialsSize,
+            "UDP binding credentials used an invalid size."
+        );
+
+        Require(
+            encoded[0] == 0x01U
+                && encoded[1] == 0x02U
+                && encoded[2] == 0x03U
+                && encoded[3] == 0x04U,
+            "UDP binding player ID was not network ordered."
+        );
+
+        const auto decoded =
+            UdpBindingCredentialsCodec::Decode(
+                encoded.data(),
+                encoded.size()
+            );
+
+        Require(
+            decoded.playerId == credentials.playerId
+                && decoded.sessionToken
+                == credentials.sessionToken,
+            "UDP binding credentials did not round trip."
+        );
+
+        bool rejectedWrongSize = false;
+
+        try
+        {
+            static_cast<void>(
+                UdpBindingCredentialsCodec::Decode(
+                    encoded.data(),
+                    encoded.size() - 1U
+                )
+            );
+        }
+        catch (const std::invalid_argument&)
+        {
+            rejectedWrongSize = true;
+        }
+
+        Require(
+            rejectedWrongSize,
+            "UDP binding credentials accepted a wrong size."
+        );
+    }
+
+    void UdpSequenceTrackerUsesSerialNumberOrdering()
+    {
+        tdr::protocol::UdpSequenceTracker tracker;
+
+        Require(
+            tracker.Accept(100U),
+            "The first UDP sequence was not accepted."
+        );
+
+        Require(
+            !tracker.Accept(100U),
+            "A duplicate UDP sequence was accepted."
+        );
+
+        Require(
+            !tracker.Accept(99U),
+            "An older UDP sequence was accepted."
+        );
+
+        Require(
+            tracker.Accept(101U),
+            "A newer UDP sequence was rejected."
+        );
+
+        tdr::protocol::UdpSequenceTracker wrapTracker;
+
+        Require(
+            wrapTracker.Accept(0xFFFFFFFEU),
+            "The sequence before wrap was rejected."
+        );
+
+        Require(
+            wrapTracker.Accept(0xFFFFFFFFU),
+            "The final sequence before wrap was rejected."
+        );
+
+        Require(
+            wrapTracker.Accept(0U),
+            "A wrapped UDP sequence was rejected."
+        );
+
+        Require(
+            !wrapTracker.Accept(0xFFFFFFFFU),
+            "A pre-wrap sequence was accepted after wrap."
+        );
+
+        tdr::protocol::UdpSequenceTracker halfRangeTracker;
+
+        Require(
+            halfRangeTracker.Accept(0U),
+            "The zero UDP sequence was rejected."
+        );
+
+        Require(
+            !halfRangeTracker.Accept(0x80000000U),
+            "The half-range UDP sequence was accepted."
+        );
     }
 
     void UdpPingEncodesInNetworkByteOrder()
@@ -378,6 +507,10 @@ int main()
         UdpMessageTypesAreClassifiedCorrectly();
 
         UdpMessageHeaderUsesStableWireLayout();
+
+        UdpBindingCredentialsUseStableWireLayout();
+
+        UdpSequenceTrackerUsesSerialNumberOrdering();
 
         UdpPingEncodesInNetworkByteOrder();
 

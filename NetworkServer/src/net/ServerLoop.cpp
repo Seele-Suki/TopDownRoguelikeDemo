@@ -276,6 +276,39 @@ namespace tdr::net
                     packet.size()
                 );
             }
+
+            const auto changedRoomIds =
+                session.TakeChangedRoomIds();
+
+            for (const std::string& roomId :
+                changedRoomIds)
+            {
+                coordinator_.BroadcastRoomState(
+                    roomId
+                );
+            }
+
+            const auto startedRoomIds =
+                session.TakeStartedRoomIds();
+
+            for (const std::string& roomId :
+                startedRoomIds)
+            {
+                coordinator_.BroadcastGameStarted(
+                    roomId
+                );
+            }
+
+            const auto closedRoomIds =
+                session.TakeClosedRoomIds();
+
+            for (const std::string& roomId :
+                closedRoomIds)
+            {
+                coordinator_.NotifyRoomClosed(
+                    roomId
+                );
+            }
         }
     }
 

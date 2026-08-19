@@ -7,6 +7,7 @@
 #include "protocol/PacketCodec.h"
 #include "protocol/UdpBindingCredentialsCodec.h"
 #include "protocol/UdpPacketCodec.h"
+#include "protocol/RoomStateSnapshotCodec.h"
 
 #include <WinSock2.h>
 #include <WS2tcpip.h>
@@ -247,6 +248,24 @@ namespace
         }
 
         return result > 0;
+    }
+
+    void SendSessionPacket(
+        tdr::net::TcpClientSession& session,
+        const tdr::protocol::MessageType type,
+        const std::vector<std::uint8_t>& payload
+    )
+    {
+        const auto encoded =
+            tdr::protocol::PacketCodec::Encode(
+                type,
+                payload
+            );
+
+        session.ReceiveBytes(
+            encoded.data(),
+            encoded.size()
+        );
     }
 
     void SendAll(
@@ -561,6 +580,52 @@ int main()
             return 1;
         }
 
+        const auto expectedSnapshotPayload =
+            tdr::protocol::
+            RoomStateSnapshotCodec::Encode(
+                coordinator.BuildRoomStateSnapshot(
+                    "ROOM-1"
+                )
+            );
+
+        const auto expectedSnapshotPacket =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                RoomStateSnapshot,
+                expectedSnapshotPayload
+            );
+
+        try
+        {
+            const auto receivedSnapshot =
+                ReceiveWithTimeout(
+                    client.NativeHandle(),
+                    expectedSnapshotPacket.size()
+                );
+
+            if (receivedSnapshot !=
+                expectedSnapshotPacket)
+            {
+                std::cerr
+                    << "[FAIL] Server loop sent "
+                    << "the wrong room snapshot."
+                    << std::endl;
+
+                return 1;
+            }
+        }
+        catch (const std::exception& exception)
+        {
+            std::cerr
+                << "[FAIL] Server loop did not "
+                << "automatically broadcast the "
+                << "created room snapshot: "
+                << exception.what()
+                << std::endl;
+
+            return 1;
+        }
+
         const auto& room =
             coordinator.Rooms().FindRoom(
                 "ROOM-1"
@@ -583,6 +648,258 @@ int main()
             coordinator.FindSession(
                 playerId
             );
+
+        TestClientSocket gameGuest =
+            ConnectLoopbackClient(
+                listener.BoundPort()
+            );
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000)
+        );
+
+        const auto guestHelloBytes =
+            ReceiveWithTimeout(
+                gameGuest.NativeHandle(),
+                tdr::protocol::kMessageHeaderSize
+                + tdr::protocol::
+                kUdpBindingCredentialsSize
+            );
+
+        tdr::protocol::PacketCodec
+            guestHelloCodec;
+
+        guestHelloCodec.Append(
+            guestHelloBytes.data(),
+            guestHelloBytes.size()
+        );
+
+        const auto guestHelloPackets =
+            guestHelloCodec.DecodeAvailable();
+
+        if (guestHelloPackets.size() != 1U ||
+            guestHelloPackets.front().type !=
+            tdr::protocol::MessageType::
+            ServerHello)
+        {
+            std::cerr
+                << "[FAIL] Game-start guest did "
+                << "not receive ServerHello."
+                << std::endl;
+
+            return 1;
+        }
+
+        const auto guestCredentials =
+            tdr::protocol::
+            UdpBindingCredentialsCodec::Decode(
+                guestHelloPackets.front()
+                .payload.data(),
+                guestHelloPackets.front()
+                .payload.size()
+            );
+
+        auto& guestSession =
+            coordinator.FindSession(
+                guestCredentials.playerId
+            );
+
+        SendSessionPacket(
+            guestSession,
+            tdr::protocol::MessageType::SetNickname,
+            {
+                static_cast<std::uint8_t>('G'),
+                static_cast<std::uint8_t>('u'),
+                static_cast<std::uint8_t>('e'),
+                static_cast<std::uint8_t>('s'),
+                static_cast<std::uint8_t>('t')
+            }
+        );
+
+        SendSessionPacket(
+            guestSession,
+            tdr::protocol::MessageType::
+            JoinRoomRequest,
+            {
+                static_cast<std::uint8_t>('R'),
+                static_cast<std::uint8_t>('O'),
+                static_cast<std::uint8_t>('O'),
+                static_cast<std::uint8_t>('M'),
+                static_cast<std::uint8_t>('-'),
+                static_cast<std::uint8_t>('1')
+            }
+        );
+
+        static_cast<void>(
+            guestSession.TakeOutgoingPackets()
+            );
+
+        static_cast<void>(
+            guestSession.TakeChangedRoomIds()
+            );
+
+        SendSessionPacket(
+            session,
+            tdr::protocol::MessageType::
+            SetPlayerSelection,
+            {
+                static_cast<std::uint8_t>(
+                    tdr::room::CharacterId::Ranged),
+                static_cast<std::uint8_t>(
+                    tdr::room::DifficultyId::Normal)
+            }
+        );
+
+        SendSessionPacket(
+            session,
+            tdr::protocol::MessageType::SetReady,
+            {
+                static_cast<std::uint8_t>(1)
+            }
+        );
+
+        static_cast<void>(
+            session.TakeChangedRoomIds()
+            );
+
+        SendSessionPacket(
+            guestSession,
+            tdr::protocol::MessageType::
+            SetPlayerSelection,
+            {
+                static_cast<std::uint8_t>(
+                    tdr::room::CharacterId::Melee),
+                static_cast<std::uint8_t>(
+                    tdr::room::DifficultyId::None)
+            }
+        );
+
+        SendSessionPacket(
+            guestSession,
+            tdr::protocol::MessageType::SetReady,
+            {
+                static_cast<std::uint8_t>(1)
+            }
+        );
+
+        static_cast<void>(
+            guestSession.TakeChangedRoomIds()
+            );
+
+        SendSessionPacket(
+            session,
+            tdr::protocol::MessageType::
+            StartGameRequest,
+            {}
+        );
+
+        const auto finalSnapshotPayload =
+            tdr::protocol::
+            RoomStateSnapshotCodec::Encode(
+                coordinator.BuildRoomStateSnapshot(
+                    "ROOM-1"
+                )
+            );
+
+        const auto finalSnapshotPacket =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                RoomStateSnapshot,
+                finalSnapshotPayload
+            );
+
+        const auto gameStartedPacket =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                GameStarted,
+                {}
+            );
+
+        const auto wakeLoopPacket =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::SetNickname,
+                {
+                    static_cast<std::uint8_t>('S'),
+                    static_cast<std::uint8_t>('e'),
+                    static_cast<std::uint8_t>('e'),
+                    static_cast<std::uint8_t>('l'),
+                    static_cast<std::uint8_t>('e')
+                }
+            );
+
+        SendAll(
+            client.NativeHandle(),
+            wakeLoopPacket
+        );
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000)
+        );
+
+        const auto hostFinalSnapshot =
+            ReceiveWithTimeout(
+                client.NativeHandle(),
+                finalSnapshotPacket.size()
+            );
+
+        const auto guestFinalSnapshot =
+            ReceiveWithTimeout(
+                gameGuest.NativeHandle(),
+                finalSnapshotPacket.size()
+            );
+
+        if (hostFinalSnapshot !=
+            finalSnapshotPacket ||
+            guestFinalSnapshot !=
+            finalSnapshotPacket)
+        {
+            std::cerr
+                << "[FAIL] Server loop did not "
+                << "broadcast the final started snapshot."
+                << std::endl;
+
+            return 1;
+        }
+
+        const auto hostGameStarted =
+            ReceiveWithTimeout(
+                client.NativeHandle(),
+                gameStartedPacket.size()
+            );
+
+        const auto guestGameStarted =
+            ReceiveWithTimeout(
+                gameGuest.NativeHandle(),
+                gameStartedPacket.size()
+            );
+
+        if (hostGameStarted != gameStartedPacket ||
+            guestGameStarted != gameStartedPacket)
+        {
+            std::cerr
+                << "[FAIL] Server loop did not "
+                << "broadcast GameStarted to both players."
+                << std::endl;
+
+            return 1;
+        }
+
+        gameGuest.Close();
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000)
+        );
+
+        if (coordinator.ConnectionCount() != 1U ||
+            coordinator.SessionCount() != 1U)
+        {
+            std::cerr
+                << "[FAIL] Game-start guest cleanup "
+                << "left the wrong connection count."
+                << std::endl;
+
+            return 1;
+        }
 
         tdr::net::UdpSocket udpClient;
         udpClient.Bind(0);
@@ -906,6 +1223,323 @@ int main()
             return 1;
         }
 
+        const std::string resetRoomId =
+            "ROOM-2";
+
+        const auto resetServerHello =
+            ReceiveWithTimeout(
+                resetClient.NativeHandle(),
+                tdr::protocol::kMessageHeaderSize
+                + tdr::protocol::
+                kUdpBindingCredentialsSize
+            );
+
+        tdr::protocol::PacketCodec
+            resetServerHelloCodec;
+
+        resetServerHelloCodec.Append(
+            resetServerHello.data(),
+            resetServerHello.size()
+        );
+
+        if (resetServerHelloCodec
+            .DecodeAvailable()
+            .size() != 1U)
+        {
+            std::cerr
+                << "[FAIL] Reset client did not "
+                << "receive ServerHello."
+                << std::endl;
+
+            return 1;
+        }
+
+        const auto resetNicknamePacket =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::SetNickname,
+                {
+                    static_cast<std::uint8_t>('R'),
+                    static_cast<std::uint8_t>('e'),
+                    static_cast<std::uint8_t>('s'),
+                    static_cast<std::uint8_t>('e'),
+                    static_cast<std::uint8_t>('t')
+                }
+            );
+
+        const auto resetCreatePacket =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                CreateRoomRequest,
+                {}
+            );
+
+        std::vector<std::uint8_t>
+            resetCreatePackets =
+            resetNicknamePacket;
+
+        resetCreatePackets.insert(
+            resetCreatePackets.end(),
+            resetCreatePacket.begin(),
+            resetCreatePacket.end()
+        );
+
+        SendAll(
+            resetClient.NativeHandle(),
+            resetCreatePackets
+        );
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000)
+        );
+
+        const auto resetCreateResponse =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                CreateRoomResponse,
+                {
+                    static_cast<std::uint8_t>('R'),
+                    static_cast<std::uint8_t>('O'),
+                    static_cast<std::uint8_t>('O'),
+                    static_cast<std::uint8_t>('M'),
+                    static_cast<std::uint8_t>('-'),
+                    static_cast<std::uint8_t>('2')
+                }
+            );
+
+        static_cast<void>(
+            ReceiveWithTimeout(
+                resetClient.NativeHandle(),
+                resetCreateResponse.size()
+            )
+            );
+
+        const auto resetSnapshot =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                RoomStateSnapshot,
+                tdr::protocol::
+                RoomStateSnapshotCodec::Encode(
+                    coordinator.BuildRoomStateSnapshot(
+                        resetRoomId
+                    )
+                )
+            );
+
+        static_cast<void>(
+            ReceiveWithTimeout(
+                resetClient.NativeHandle(),
+                resetSnapshot.size()
+            )
+            );
+
+        TestClientSocket closureGuest =
+            ConnectLoopbackClient(
+                listener.BoundPort()
+            );
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000)
+        );
+
+        const auto closureGuestHello =
+            ReceiveWithTimeout(
+                closureGuest.NativeHandle(),
+                tdr::protocol::kMessageHeaderSize
+                + tdr::protocol::
+                kUdpBindingCredentialsSize
+            );
+
+        if (closureGuestHello.empty())
+        {
+            std::cerr
+                << "[FAIL] Closure guest did not "
+                << "receive ServerHello."
+                << std::endl;
+
+            return 1;
+        }
+
+        const auto closureGuestNickname =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::SetNickname,
+                {
+                    static_cast<std::uint8_t>('C'),
+                    static_cast<std::uint8_t>('l'),
+                    static_cast<std::uint8_t>('o'),
+                    static_cast<std::uint8_t>('s'),
+                    static_cast<std::uint8_t>('e')
+                }
+            );
+
+        const auto closureGuestJoin =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                JoinRoomRequest,
+                {
+                    static_cast<std::uint8_t>('R'),
+                    static_cast<std::uint8_t>('O'),
+                    static_cast<std::uint8_t>('O'),
+                    static_cast<std::uint8_t>('M'),
+                    static_cast<std::uint8_t>('-'),
+                    static_cast<std::uint8_t>('2')
+                }
+            );
+
+        std::vector<std::uint8_t>
+            closureGuestPackets =
+            closureGuestNickname;
+
+        closureGuestPackets.insert(
+            closureGuestPackets.end(),
+            closureGuestJoin.begin(),
+            closureGuestJoin.end()
+        );
+
+        SendAll(
+            closureGuest.NativeHandle(),
+            closureGuestPackets
+        );
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000)
+        );
+
+        const auto closureGuestJoinResponse =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                JoinRoomResponse,
+                {
+                    static_cast<std::uint8_t>('R'),
+                    static_cast<std::uint8_t>('O'),
+                    static_cast<std::uint8_t>('O'),
+                    static_cast<std::uint8_t>('M'),
+                    static_cast<std::uint8_t>('-'),
+                    static_cast<std::uint8_t>('2')
+                }
+            );
+
+        static_cast<void>(
+            ReceiveWithTimeout(
+                closureGuest.NativeHandle(),
+                closureGuestJoinResponse.size()
+            )
+            );
+
+        const auto twoPlayerSnapshot =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                RoomStateSnapshot,
+                tdr::protocol::
+                RoomStateSnapshotCodec::Encode(
+                    coordinator.BuildRoomStateSnapshot(
+                        resetRoomId
+                    )
+                )
+            );
+
+        static_cast<void>(
+            ReceiveWithTimeout(
+                resetClient.NativeHandle(),
+                twoPlayerSnapshot.size()
+            )
+            );
+
+        static_cast<void>(
+            ReceiveWithTimeout(
+                closureGuest.NativeHandle(),
+                twoPlayerSnapshot.size()
+            )
+            );
+
+        const auto resetLeavePacket =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::LeaveRoom,
+                {}
+            );
+
+        SendAll(
+            resetClient.NativeHandle(),
+            resetLeavePacket
+        );
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000)
+        );
+
+        const auto closureError =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                ErrorMessage,
+                {
+                    static_cast<std::uint8_t>('R'),
+                    static_cast<std::uint8_t>('o'),
+                    static_cast<std::uint8_t>('o'),
+                    static_cast<std::uint8_t>('m'),
+                    static_cast<std::uint8_t>(' '),
+                    static_cast<std::uint8_t>('w'),
+                    static_cast<std::uint8_t>('a'),
+                    static_cast<std::uint8_t>('s'),
+                    static_cast<std::uint8_t>(' '),
+                    static_cast<std::uint8_t>('c'),
+                    static_cast<std::uint8_t>('l'),
+                    static_cast<std::uint8_t>('o'),
+                    static_cast<std::uint8_t>('s'),
+                    static_cast<std::uint8_t>('e'),
+                    static_cast<std::uint8_t>('d'),
+                    static_cast<std::uint8_t>(' '),
+                    static_cast<std::uint8_t>('b'),
+                    static_cast<std::uint8_t>('y'),
+                    static_cast<std::uint8_t>(' '),
+                    static_cast<std::uint8_t>('t'),
+                    static_cast<std::uint8_t>('h'),
+                    static_cast<std::uint8_t>('e'),
+                    static_cast<std::uint8_t>(' '),
+                    static_cast<std::uint8_t>('h'),
+                    static_cast<std::uint8_t>('o'),
+                    static_cast<std::uint8_t>('s'),
+                    static_cast<std::uint8_t>('t'),
+                    static_cast<std::uint8_t>('.')
+                }
+            );
+
+        static_cast<void>(
+            ReceiveWithTimeout(
+                resetClient.NativeHandle(),
+                resetLeavePacket.size()
+            )
+            );
+
+        static_cast<void>(
+            ReceiveWithTimeout(
+                closureGuest.NativeHandle(),
+                resetLeavePacket.size()
+            )
+            );
+
+        static_cast<void>(
+            ReceiveWithTimeout(
+                closureGuest.NativeHandle(),
+                closureError.size()
+            )
+            );
+
+        closureGuest.Close();
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000)
+        );
+
+        if (coordinator.ConnectionCount() != 1U ||
+            coordinator.SessionCount() != 1U)
+        {
+            std::cerr
+                << "[FAIL] Closure guest cleanup "
+                << "left the wrong connection count."
+                << std::endl;
+
+            return 1;
+        }
+
         resetClient.Abort();
 
         try
@@ -917,20 +1551,20 @@ int main()
         catch (const std::exception& exception)
         {
             std::cerr
-                << "[FAIL] Server loop threw while handling "
-                << "an aborted TCP connection: "
+                << "[FAIL] Server loop threw while "
+                << "handling the reset client: "
                 << exception.what()
                 << std::endl;
 
             return 1;
         }
 
-        if (coordinator.ConnectionCount() != 0
-            || coordinator.SessionCount() != 0)
+        if (coordinator.ConnectionCount() != 0U ||
+            coordinator.SessionCount() != 0U)
         {
             std::cerr
                 << "[FAIL] Server loop did not remove "
-                << "the aborted TCP connection and session."
+                << "the reset client and closure guest."
                 << std::endl;
 
             return 1;

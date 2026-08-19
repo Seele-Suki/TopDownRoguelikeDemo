@@ -55,10 +55,259 @@ namespace
 
         return address;
     }
+
+    bool ExpectSingleChangedRoom(
+        tdr::net::TcpClientSession& session,
+        const std::string& expectedRoomId,
+        const std::string& operation
+    )
+    {
+        const auto changedRoomIds =
+            session.TakeChangedRoomIds();
+
+        if (changedRoomIds.size() != 1U ||
+            changedRoomIds.front() != expectedRoomId)
+        {
+            std::cerr
+                << "[FAIL] "
+                << operation
+                << " did not report exactly one "
+                << "changed room."
+                << std::endl;
+
+            return false;
+        }
+
+        return true;
+    }
+
+    bool TestSuccessfulRoomChangesAreReported()
+    {
+        tdr::room::RoomManager roomManager;
+        tdr::room::PlayerIdAllocator playerIdAllocator;
+        tdr::room::SessionTokenGenerator tokenGenerator;
+
+        tdr::net::TcpClientSession host(
+            playerIdAllocator,
+            tokenGenerator,
+            roomManager
+        );
+
+        SendPacket(
+            host,
+            tdr::protocol::MessageType::SetNickname,
+            ToBytes("Host")
+        );
+
+        SendPacket(
+            host,
+            tdr::protocol::MessageType::
+            CreateRoomRequest,
+            {}
+        );
+
+        static_cast<void>(
+            host.TakeOutgoingPackets()
+            );
+
+        if (!ExpectSingleChangedRoom(
+            host,
+            "ROOM-1",
+            "CreateRoomRequest"))
+        {
+            return false;
+        }
+
+        SendPacket(
+            host,
+            tdr::protocol::MessageType::
+            SetPlayerSelection,
+            {
+                static_cast<std::uint8_t>(
+                    tdr::room::CharacterId::Ranged),
+                static_cast<std::uint8_t>(
+                    tdr::room::DifficultyId::Normal)
+            }
+        );
+
+        if (!ExpectSingleChangedRoom(
+            host,
+            "ROOM-1",
+            "SetPlayerSelection"))
+        {
+            return false;
+        }
+
+        SendPacket(
+            host,
+            tdr::protocol::MessageType::SetReady,
+            {
+                static_cast<std::uint8_t>(1)
+            }
+        );
+
+        if (!ExpectSingleChangedRoom(
+            host,
+            "ROOM-1",
+            "SetReady"))
+        {
+            return false;
+        }
+
+        tdr::net::TcpClientSession guest(
+            playerIdAllocator,
+            tokenGenerator,
+            roomManager
+        );
+
+        SendPacket(
+            guest,
+            tdr::protocol::MessageType::SetNickname,
+            ToBytes("Guest")
+        );
+
+        SendPacket(
+            guest,
+            tdr::protocol::MessageType::
+            JoinRoomRequest,
+            ToBytes("ROOM-1")
+        );
+
+        static_cast<void>(
+            guest.TakeOutgoingPackets()
+            );
+
+        if (!ExpectSingleChangedRoom(
+            guest,
+            "ROOM-1",
+            "JoinRoomRequest"))
+        {
+            return false;
+        }
+
+        SendPacket(
+            guest,
+            tdr::protocol::MessageType::
+            SetPlayerSelection,
+            {
+                static_cast<std::uint8_t>(
+                    tdr::room::CharacterId::Melee),
+                static_cast<std::uint8_t>(
+                    tdr::room::DifficultyId::None)
+            }
+        );
+
+        if (!ExpectSingleChangedRoom(
+            guest,
+            "ROOM-1",
+            "Guest SetPlayerSelection"))
+        {
+            return false;
+        }
+
+        SendPacket(
+            guest,
+            tdr::protocol::MessageType::SetReady,
+            {
+                static_cast<std::uint8_t>(1)
+            }
+        );
+
+        if (!ExpectSingleChangedRoom(
+            guest,
+            "ROOM-1",
+            "Guest SetReady"))
+        {
+            return false;
+        }
+
+        SendPacket(
+            guest,
+            tdr::protocol::MessageType::LeaveRoom,
+            {}
+        );
+
+        if (!ExpectSingleChangedRoom(
+            guest,
+            "ROOM-1",
+            "Guest LeaveRoom"))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    bool ExpectLeaveRoomAcknowledgement(
+        tdr::net::TcpClientSession& session,
+        const std::string& operation
+    )
+    {
+        const auto outgoingPackets =
+            session.TakeOutgoingPackets();
+
+        if (outgoingPackets.size() != 1U)
+        {
+            std::cerr
+                << "[FAIL] "
+                << operation
+                << " did not produce exactly one "
+                << "LeaveRoom acknowledgement."
+                << std::endl;
+
+            return false;
+        }
+
+        tdr::protocol::PacketCodec codec;
+
+        codec.Append(
+            outgoingPackets.front().data(),
+            outgoingPackets.front().size()
+        );
+
+        const auto decodedPackets =
+            codec.DecodeAvailable();
+
+        if (decodedPackets.size() != 1U)
+        {
+            std::cerr
+                << "[FAIL] "
+                << operation
+                << " acknowledgement could not "
+                << "be decoded."
+                << std::endl;
+
+            return false;
+        }
+
+        const auto& acknowledgement =
+            decodedPackets.front();
+
+        if (acknowledgement.type !=
+            tdr::protocol::MessageType::LeaveRoom ||
+            !acknowledgement.payload.empty())
+        {
+            std::cerr
+                << "[FAIL] "
+                << operation
+                << " produced an invalid "
+                << "LeaveRoom acknowledgement."
+                << std::endl;
+
+            return false;
+        }
+
+        return true;
+    }
 }
 
 int main()
 {
+    if (!TestSuccessfulRoomChangesAreReported())
+    {
+        return 1;
+    }
+
     tdr::room::RoomManager roomManager;
 
     tdr::room::PlayerIdAllocator playerIdAllocator;
@@ -145,6 +394,29 @@ int main()
         std::cerr
             << "[FAIL] CreateRoomResponse contained "
             << "the wrong room ID."
+            << std::endl;
+
+        return 1;
+    }
+
+    const auto changedRoomIds =
+        hostSession.TakeChangedRoomIds();
+
+    if (changedRoomIds.size() != 1U)
+    {
+        std::cerr
+            << "[FAIL] CreateRoomRequest did not "
+            << "report exactly one changed room."
+            << std::endl;
+
+        return 1;
+    }
+
+    if (changedRoomIds.front() != "ROOM-1")
+    {
+        std::cerr
+            << "[FAIL] CreateRoomRequest reported "
+            << "the wrong changed room ID."
             << std::endl;
 
         return 1;
@@ -431,6 +703,23 @@ int main()
         {}
     );
 
+    if (!ExpectLeaveRoomAcknowledgement(
+        joiningSession,
+        "Guest LeaveRoom"))
+    {
+        return 1;
+    }
+
+    if (!joiningSession.TakeClosedRoomIds().empty())
+    {
+        std::cerr
+            << "[FAIL] Guest LeaveRoom incorrectly "
+            << "reported the room as closed."
+            << std::endl;
+
+        return 1;
+    }
+
     if (joiningSession.HasRoom())
     {
         std::cerr
@@ -545,30 +834,131 @@ int main()
         }
     );
 
-    bool rejectedGuestStart = false;
+    const auto rejectedStartPacket =
+        tdr::protocol::PacketCodec::Encode(
+            tdr::protocol::MessageType::
+            StartGameRequest,
+            {}
+        );
+
+    const auto clearReadyPacket =
+        tdr::protocol::PacketCodec::Encode(
+            tdr::protocol::MessageType::SetReady,
+            {
+                static_cast<std::uint8_t>(0)
+            }
+        );
+
+    std::vector<std::uint8_t> combinedPackets =
+        rejectedStartPacket;
+
+    combinedPackets.insert(
+        combinedPackets.end(),
+        clearReadyPacket.begin(),
+        clearReadyPacket.end()
+    );
+
+    bool requestErrorEscaped = false;
 
     try
     {
-        SendPacket(
-            joiningSession,
-            tdr::protocol::MessageType::StartGameRequest,
-            {}
+        joiningSession.ReceiveBytes(
+            combinedPackets.data(),
+            combinedPackets.size()
         );
     }
-    catch (const std::exception&)
+    catch (const std::exception& exception)
     {
-        rejectedGuestStart = true;
+        requestErrorEscaped = true;
+
+        std::cerr
+            << "[FAIL] Invalid room request escaped "
+            << "the client session: "
+            << exception.what()
+            << std::endl;
     }
 
-    if (!rejectedGuestStart)
+    if (requestErrorEscaped)
+    {
+        return 1;
+    }
+
+    const auto errorPackets =
+        joiningSession.TakeOutgoingPackets();
+
+    if (errorPackets.size() != 1U)
     {
         std::cerr
-            << "[FAIL] Non-host TCP session "
-            << "started the game."
+            << "[FAIL] Invalid room request did not "
+            << "produce exactly one ErrorMessage."
             << std::endl;
 
         return 1;
     }
+
+    tdr::protocol::PacketCodec errorResponseCodec;
+
+    errorResponseCodec.Append(
+        errorPackets.front().data(),
+        errorPackets.front().size()
+    );
+
+    const auto decodedErrors =
+        errorResponseCodec.DecodeAvailable();
+
+    if (decodedErrors.size() != 1U)
+    {
+        std::cerr
+            << "[FAIL] ErrorMessage response could "
+            << "not be decoded."
+            << std::endl;
+
+        return 1;
+    }
+
+    const auto& errorResponse =
+        decodedErrors.front();
+
+    if (errorResponse.type !=
+        tdr::protocol::MessageType::ErrorMessage)
+    {
+        std::cerr
+            << "[FAIL] Invalid room request produced "
+            << "the wrong response type."
+            << std::endl;
+
+        return 1;
+    }
+
+    if (errorResponse.payload != ToBytes(
+        "Only the room host can start the game."))
+    {
+        std::cerr
+            << "[FAIL] ErrorMessage contained "
+            << "the wrong message."
+            << std::endl;
+
+        return 1;
+    }
+
+    if (hostSession.CurrentRoom()
+        .PlayerAt(1U).isReady)
+    {
+        std::cerr
+            << "[FAIL] Session did not process the "
+            << "valid packet after the rejected packet."
+            << std::endl;
+
+        return 1;
+    }
+
+    SendPacket(
+        joiningSession,
+        tdr::protocol::MessageType::SetReady,
+        {
+            static_cast<std::uint8_t>(1)
+        }
+    );
 
     if (hostSession.CurrentRoom().Status()
         != tdr::room::RoomStatus::Waiting)
@@ -580,6 +970,10 @@ int main()
 
         return 1;
     }
+
+    static_cast<void>(
+        hostSession.TakeChangedRoomIds()
+        );
 
     bool hostStartAccepted = true;
 
@@ -618,6 +1012,44 @@ int main()
         return 1;
     }
 
+    const auto startChangedRoomIds =
+        hostSession.TakeChangedRoomIds();
+
+    if (startChangedRoomIds.size() != 1U ||
+        startChangedRoomIds.front() != roomId)
+    {
+        std::cerr
+            << "[FAIL] StartGameRequest did not "
+            << "report the started room as changed."
+            << std::endl;
+
+        return 1;
+    }
+
+    const auto startedRoomIds =
+        hostSession.TakeStartedRoomIds();
+
+    if (startedRoomIds.size() != 1U ||
+        startedRoomIds.front() != roomId)
+    {
+        std::cerr
+            << "[FAIL] StartGameRequest did not "
+            << "report exactly one started room."
+            << std::endl;
+
+        return 1;
+    }
+
+    if (!hostSession.TakeStartedRoomIds().empty())
+    {
+        std::cerr
+            << "[FAIL] Started room notifications "
+            << "were not cleared after being taken."
+            << std::endl;
+
+        return 1;
+    }
+
     bool hostLeaveAccepted = true;
 
     try
@@ -640,6 +1072,37 @@ int main()
 
     if (!hostLeaveAccepted)
     {
+        return 1;
+    }
+
+    if (!ExpectLeaveRoomAcknowledgement(
+        hostSession,
+        "Host LeaveRoom"))
+    {
+        return 1;
+    }
+
+    const auto closedRoomIds =
+        hostSession.TakeClosedRoomIds();
+
+    if (closedRoomIds.size() != 1U ||
+        closedRoomIds.front() != roomId)
+    {
+        std::cerr
+            << "[FAIL] Host LeaveRoom did not "
+            << "report exactly one closed room."
+            << std::endl;
+
+        return 1;
+    }
+
+    if (!hostSession.TakeClosedRoomIds().empty())
+    {
+        std::cerr
+            << "[FAIL] Closed room notifications "
+            << "were not cleared after being taken."
+            << std::endl;
+
         return 1;
     }
 

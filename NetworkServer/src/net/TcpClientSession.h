@@ -37,9 +37,22 @@ namespace tdr::net
         std::vector<std::vector<std::uint8_t>>
             TakeOutgoingPackets();
 
+        [[nodiscard]]
+        std::vector<std::string>
+            TakeChangedRoomIds();
+
+        [[nodiscard]]
+        std::vector<std::string>
+            TakeStartedRoomIds();
+
+        [[nodiscard]]
+        std::vector<std::string>
+            TakeClosedRoomIds();
+
         void LeaveRoom();
 
-        void InvalidateRoom(
+        [[nodiscard]]
+        bool InvalidateRoom(
             const std::string& roomId
         ) noexcept;
 
@@ -118,5 +131,14 @@ namespace tdr::net
 
         std::vector<std::vector<std::uint8_t>>
             outgoingPackets_;
+
+        std::vector<std::string>
+            changedRoomIds_;
+
+        std::vector<std::string>
+            startedRoomIds_;
+
+        std::vector<std::string>
+            closedRoomIds_;
     };
 }

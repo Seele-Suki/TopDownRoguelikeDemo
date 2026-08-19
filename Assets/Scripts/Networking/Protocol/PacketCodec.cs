@@ -26,7 +26,7 @@ namespace TopDownRoguelike.Networking.Protocol
         public PacketError Code { get; }
     }
 
-    public static class PacketCodec
+    public sealed class PacketCodec
     {
         public const uint ProtocolMagic = 0x54445231;
         public const ushort ProtocolVersion = 1;
@@ -43,7 +43,7 @@ namespace TopDownRoguelike.Networking.Protocol
         public const int MaxReceiveBufferSize =
             MaxPacketSize * 2;
 
-        private static readonly List<byte> ReceiveBuffer =
+        private readonly List<byte> ReceiveBuffer =
             new List<byte>();
 
         public static void WriteNetworkUInt16(
@@ -176,7 +176,7 @@ namespace TopDownRoguelike.Networking.Protocol
             return packet;
         }
 
-        public static void Append(
+        public void Append(
             byte[] data,
             int offset,
             int count)
@@ -214,7 +214,7 @@ namespace TopDownRoguelike.Networking.Protocol
             }
         }
 
-        public static bool TryDecode(
+        public bool TryDecode(
             out DecodedPacket packet)
         {
             packet = default;
@@ -296,7 +296,7 @@ namespace TopDownRoguelike.Networking.Protocol
             return true;
         }
 
-        public static List<DecodedPacket>
+        public List<DecodedPacket>
             DecodeAvailable()
         {
             var packets = new List<DecodedPacket>();
@@ -309,7 +309,7 @@ namespace TopDownRoguelike.Networking.Protocol
             return packets;
         }
 
-        public static void Clear()
+        public void Clear()
         {
             ReceiveBuffer.Clear();
         }

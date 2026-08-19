@@ -567,6 +567,119 @@ int main()
             return 1;
         }
 
+        SendPacket(
+            session,
+            tdr::protocol::MessageType::
+            SetPlayerSelection,
+            {
+                static_cast<std::uint8_t>(
+                    tdr::room::CharacterId::Ranged),
+                static_cast<std::uint8_t>(
+                    tdr::room::DifficultyId::Hard)
+            }
+        );
+
+        SendPacket(
+            session,
+            tdr::protocol::MessageType::SetReady,
+            {
+                static_cast<std::uint8_t>(1)
+            }
+        );
+
+        SendPacket(
+            guestSession,
+            tdr::protocol::MessageType::
+            SetPlayerSelection,
+            {
+                static_cast<std::uint8_t>(
+                    tdr::room::CharacterId::Melee),
+                static_cast<std::uint8_t>(
+                    tdr::room::DifficultyId::None)
+            }
+        );
+
+        SendPacket(
+            guestSession,
+            tdr::protocol::MessageType::SetReady,
+            {
+                static_cast<std::uint8_t>(1)
+            }
+        );
+
+        const auto snapshot =
+            server.BuildRoomStateSnapshot(
+                roomId
+            );
+
+        if (snapshot.roomId != roomId ||
+            snapshot.roomStatus !=
+            static_cast<std::uint8_t>(
+                tdr::room::RoomStatus::Waiting) ||
+            snapshot.difficultyId !=
+            static_cast<std::uint8_t>(
+                tdr::room::DifficultyId::Hard))
+        {
+            std::cerr
+                << "[FAIL] Coordinator mapped "
+                << "the wrong room-level snapshot data."
+                << std::endl;
+
+            return 1;
+        }
+
+        if (snapshot.players.size() != 2U)
+        {
+            std::cerr
+                << "[FAIL] Coordinator mapped "
+                << "the wrong snapshot player count."
+                << std::endl;
+
+            return 1;
+        }
+
+        const auto& hostSnapshot =
+            snapshot.players[0];
+
+        if (hostSnapshot.playerId !=
+            session.PlayerId() ||
+            !hostSnapshot.isHost ||
+            !hostSnapshot.isReady ||
+            hostSnapshot.characterId !=
+            static_cast<std::uint8_t>(
+                tdr::room::CharacterId::Ranged) ||
+            hostSnapshot.nickname !=
+            "DisconnectedHost")
+        {
+            std::cerr
+                << "[FAIL] Coordinator mapped "
+                << "the host snapshot incorrectly."
+                << std::endl;
+
+            return 1;
+        }
+
+        const auto& guestSnapshot =
+            snapshot.players[1];
+
+        if (guestSnapshot.playerId !=
+            guestSession.PlayerId() ||
+            guestSnapshot.isHost ||
+            !guestSnapshot.isReady ||
+            guestSnapshot.characterId !=
+            static_cast<std::uint8_t>(
+                tdr::room::CharacterId::Melee) ||
+            guestSnapshot.nickname !=
+            "ConnectedGuest")
+        {
+            std::cerr
+                << "[FAIL] Coordinator mapped "
+                << "the guest snapshot incorrectly."
+                << std::endl;
+
+            return 1;
+        }
+
         server.RemoveConnection(rawSocket);
 
         if (server.ConnectionCount() != 1

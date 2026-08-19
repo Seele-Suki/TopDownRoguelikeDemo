@@ -48,6 +48,8 @@ add_executable(NetworkServer
     src/protocol/UdpBindingCredentialsCodec.h
     src/protocol/UdpBindingCredentialsCodec.cpp
     src/protocol/UdpSequenceTracker.h
+    src/protocol/RoomStateSnapshotCodec.h
+    src/protocol/RoomStateSnapshotCodec.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -438,6 +440,8 @@ add_executable(ServerCoordinatorTests
     src/protocol/UdpMessageHeader.h
     src/protocol/UdpPacketCodec.h
     src/protocol/UdpPacketCodec.cpp
+    src/protocol/RoomStateSnapshotCodec.h
+    src/protocol/RoomStateSnapshotCodec.cpp
 )
 
 target_include_directories(ServerCoordinatorTests
@@ -511,6 +515,8 @@ add_executable(ServerLoopTests
     src/protocol/UdpMessageHeader.h
     src/protocol/UdpPacketCodec.h
     src/protocol/UdpPacketCodec.cpp
+    src/protocol/RoomStateSnapshotCodec.h
+    src/protocol/RoomStateSnapshotCodec.cpp
 )
 
 target_include_directories(ServerLoopTests
@@ -568,6 +574,8 @@ add_executable(ServerPacketSendTests
     src/protocol/MessageHeader.h
     src/protocol/NetworkByteOrder.h
     src/protocol/SessionTokenCodec.cpp
+    src/protocol/RoomStateSnapshotCodec.h
+    src/protocol/RoomStateSnapshotCodec.cpp
 )
 
 target_include_directories(ServerPacketSendTests
@@ -665,6 +673,8 @@ add_executable(UdpPingHandlerTests
     src/protocol/UdpPacketCodec.h
     src/protocol/UdpPacketCodec.cpp
     src/protocol/UdpSequenceTracker.h
+    src/protocol/RoomStateSnapshotCodec.h
+    src/protocol/RoomStateSnapshotCodec.cpp
 )
 
 target_include_directories(UdpPingHandlerTests
@@ -706,5 +716,36 @@ target_include_directories(SessionTokenCodecTests
 add_test(
     NAME SessionTokenCodecTests
     COMMAND SessionTokenCodecTests
+)
+
+add_executable(RoomStateSnapshotCodecTests
+    tests/RoomStateSnapshotCodecTests.cpp
+
+    src/protocol/RoomStateSnapshotCodec.h
+    src/protocol/RoomStateSnapshotCodec.cpp
+    src/protocol/NetworkByteOrder.h
+)
+
+target_include_directories(RoomStateSnapshotCodecTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(RoomStateSnapshotCodecTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(RoomStateSnapshotCodecTests
+        PRIVATE
+            ws2_32
+    )
+endif()
+
+add_test(
+    NAME RoomStateSnapshotCodecTests
+    COMMAND RoomStateSnapshotCodecTests
 )
 endif()

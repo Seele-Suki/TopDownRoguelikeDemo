@@ -274,6 +274,207 @@ namespace tdr::net
         );
     }
 
+    tdr::protocol::RoomStateSnapshot
+        ServerCoordinator::BuildRoomStateSnapshot(
+            const std::string& roomId
+        ) const
+    {
+        const tdr::room::Room& room =
+            roomManager_.FindRoom(
+                roomId
+            );
+
+        tdr::protocol::RoomStateSnapshot
+            snapshot{};
+
+        snapshot.roomId =
+            room.Id();
+
+        snapshot.roomStatus =
+            static_cast<std::uint8_t>(
+                room.Status()
+                );
+
+        snapshot.difficultyId =
+            static_cast<std::uint8_t>(
+                room.SelectedDifficulty()
+                );
+
+        snapshot.players.reserve(
+            room.PlayerCount()
+        );
+
+        for (std::size_t index = 0U;
+            index < room.PlayerCount();
+            ++index)
+        {
+            const tdr::room::RoomPlayer& player =
+                room.PlayerAt(index);
+
+            snapshot.players.push_back(
+                tdr::protocol::RoomPlayerSnapshot
+                {
+                    player.playerId,
+                    player.isHost,
+                    player.isReady,
+                    static_cast<std::uint8_t>(
+                        player.selectedCharacter
+                    ),
+                    player.nickname
+                }
+            );
+        }
+
+        return snapshot;
+    }
+
+    void ServerCoordinator::BroadcastRoomState(
+        const std::string& roomId
+    )
+    {
+        const auto snapshot =
+            BuildRoomStateSnapshot(
+                roomId
+            );
+
+        const auto payload =
+            tdr::protocol::
+            RoomStateSnapshotCodec::Encode(
+                snapshot
+            );
+
+        for (const auto& sessionEntry :
+            sessions_)
+        {
+            const TcpClientSession& session =
+                *sessionEntry.second;
+
+            if (!session.HasRoom())
+            {
+                continue;
+            }
+
+            if (session.CurrentRoom().Id()
+                != roomId)
+            {
+                continue;
+            }
+
+            SendPacketToPlayer(
+                session.PlayerId(),
+                tdr::protocol::MessageType::
+                RoomStateSnapshot,
+                payload
+            );
+        }
+    }
+
+    void ServerCoordinator::BroadcastGameStarted(
+        const std::string& roomId
+    )
+    {
+        const tdr::room::Room& room =
+            roomManager_.FindRoom(
+                roomId
+            );
+
+        if (room.Status() !=
+            tdr::room::RoomStatus::Started)
+        {
+            throw std::runtime_error(
+                "Cannot broadcast GameStarted "
+                "for a waiting room."
+            );
+        }
+
+        const std::vector<std::uint8_t>
+            emptyPayload;
+
+        for (const auto& sessionEntry :
+            sessions_)
+        {
+            const TcpClientSession& session =
+                *sessionEntry.second;
+
+            if (!session.HasRoom())
+            {
+                continue;
+            }
+
+            if (session.CurrentRoom().Id()
+                != roomId)
+            {
+                continue;
+            }
+
+            SendPacketToPlayer(
+                session.PlayerId(),
+                tdr::protocol::MessageType::
+                GameStarted,
+                emptyPayload
+            );
+        }
+    }
+
+    void ServerCoordinator::NotifyRoomClosed(
+        const std::string& roomId
+    )
+    {
+        const std::string errorMessage =
+            "Room was closed by the host.";
+
+        const std::vector<std::uint8_t>
+            errorPayload(
+                errorMessage.begin(),
+                errorMessage.end()
+            );
+
+        const std::vector<std::uint8_t>
+            emptyPayload;
+
+        for (const auto& sessionEntry :
+            sessions_)
+        {
+            TcpClientSession& session =
+                *sessionEntry.second;
+
+            if (!session.InvalidateRoom(
+                roomId))
+            {
+                continue;
+            }
+
+            try
+            {
+                SendPacketToPlayer(
+                    session.PlayerId(),
+                    tdr::protocol::MessageType::
+                    LeaveRoom,
+                    emptyPayload
+                );
+            }
+            catch (const std::exception&)
+            {
+                // A stale or already-closed client must not
+                // abort cleanup for the remaining sessions.
+            }
+
+            try
+            {
+                SendPacketToPlayer(
+                    session.PlayerId(),
+                    tdr::protocol::MessageType::
+                    ErrorMessage,
+                    errorPayload
+                );
+            }
+            catch (const std::exception&)
+            {
+                // Room invalidation has already completed.
+            }
+        }
+    }
+
     void ServerCoordinator::RemoveSession(
         const std::uint32_t playerId
     )
@@ -331,20 +532,9 @@ namespace tdr::net
 
         if (!closedRoomId.empty())
         {
-            for (auto& sessionEntry : sessions_)
-            {
-                const std::uint32_t otherPlayerId =
-                    sessionEntry.first;
-
-                if (otherPlayerId == playerId)
-                {
-                    continue;
-                }
-
-                sessionEntry.second->InvalidateRoom(
-                    closedRoomId
-                );
-            }
+            NotifyRoomClosed(
+                closedRoomId
+            );
         }
 
         connections_.erase(

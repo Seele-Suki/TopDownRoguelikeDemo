@@ -7,12 +7,14 @@
 #include "room/SessionTokenGenerator.h"
 #include "protocol/PacketCodec.h"
 #include "protocol/UdpMessageHeader.h"
+#include "protocol/RoomStateSnapshotCodec.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <string>
 
 namespace tdr::net
 {
@@ -69,8 +71,26 @@ namespace tdr::net
             const std::vector<std::uint8_t>& payload
         );
 
+        [[nodiscard]]
+        tdr::protocol::RoomStateSnapshot
+            BuildRoomStateSnapshot(
+                const std::string& roomId
+            ) const;
+
+        void BroadcastRoomState(
+            const std::string& roomId
+        );
+
         void RemoveSession(
             std::uint32_t playerId
+        );
+
+        void BroadcastGameStarted(
+            const std::string& roomId
+        );
+
+        void NotifyRoomClosed(
+            const std::string& roomId
         );
 
         void RemoveConnection(

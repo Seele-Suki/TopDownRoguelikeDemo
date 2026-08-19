@@ -35,7 +35,29 @@ namespace tdr::net
 
         for (const auto& packet : packets)
         {
-            HandlePacket(packet);
+            try
+            {
+                HandlePacket(packet);
+            }
+            catch (const std::exception& exception)
+            {
+                const std::string errorMessage =
+                    exception.what();
+
+                const std::vector<std::uint8_t>
+                    errorPayload(
+                        errorMessage.begin(),
+                        errorMessage.end()
+                    );
+
+                outgoingPackets_.push_back(
+                    tdr::protocol::PacketCodec::Encode(
+                        tdr::protocol::MessageType::
+                        ErrorMessage,
+                        errorPayload
+                    )
+                );
+            }
         }
     }
 
@@ -50,6 +72,42 @@ namespace tdr::net
         );
 
         return packets;
+    }
+
+    std::vector<std::string>
+        TcpClientSession::TakeChangedRoomIds()
+    {
+        std::vector<std::string> roomIds;
+
+        roomIds.swap(
+            changedRoomIds_
+        );
+
+        return roomIds;
+    }
+
+    std::vector<std::string>
+        TcpClientSession::TakeStartedRoomIds()
+    {
+        std::vector<std::string> roomIds;
+
+        roomIds.swap(
+            startedRoomIds_
+        );
+
+        return roomIds;
+    }
+
+    std::vector<std::string>
+        TcpClientSession::TakeClosedRoomIds()
+    {
+        std::vector<std::string> roomIds;
+
+        roomIds.swap(
+            closedRoomIds_
+        );
+
+        return roomIds;
     }
 
     void TcpClientSession::LeaveRoom()
@@ -67,14 +125,17 @@ namespace tdr::net
         roomId_.clear();
     }
 
-    void TcpClientSession::InvalidateRoom(
+    bool TcpClientSession::InvalidateRoom(
         const std::string& roomId
     ) noexcept
     {
-        if (roomId_ == roomId)
+        if (roomId_ != roomId)
         {
-            roomId_.clear();
+            return false;
         }
+
+        roomId_.clear();
+        return true;
     }
 
     std::uint32_t
@@ -235,6 +296,10 @@ namespace tdr::net
                 )
             );
 
+            changedRoomIds_.push_back(
+                roomId_
+            );
+
             return;
         }
 
@@ -289,6 +354,10 @@ namespace tdr::net
                     JoinRoomResponse,
                     responsePayload
                 )
+            );
+
+            changedRoomIds_.push_back(
+                roomId_
             );
 
             return;
@@ -366,6 +435,10 @@ namespace tdr::net
                 );
             }
 
+            changedRoomIds_.push_back(
+                roomId_
+            );
+
             return;
         }
 
@@ -404,6 +477,10 @@ namespace tdr::net
                 packet.payload[0] == 1
             );
 
+            changedRoomIds_.push_back(
+                roomId_
+            );
+
             return;
         }
 
@@ -435,6 +512,14 @@ namespace tdr::net
                 playerId_
             );
 
+            changedRoomIds_.push_back(
+                roomId_
+            );
+
+            startedRoomIds_.push_back(
+                roomId_
+            );
+
             return;
         }
 
@@ -456,7 +541,36 @@ namespace tdr::net
                 );
             }
 
+            const std::string changedRoomId =
+                roomId_;
+
+            const bool roomWillRemain =
+                CurrentRoom().HostPlayerId()
+                != playerId_;
+
             LeaveRoom();
+
+            outgoingPackets_.push_back(
+                tdr::protocol::PacketCodec::Encode(
+                    tdr::protocol::MessageType::
+                    LeaveRoom,
+                    {}
+                )
+            );
+
+            if (roomWillRemain)
+            {
+                changedRoomIds_.push_back(
+                    changedRoomId
+                );
+            }
+            else
+            {
+                closedRoomIds_.push_back(
+                    changedRoomId
+                );
+            }
+
             return;
         }
 

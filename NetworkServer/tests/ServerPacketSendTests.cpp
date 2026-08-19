@@ -3,6 +3,7 @@
 #include "net/TcpConnection.h"
 #include "net/TcpListener.h"
 #include "protocol/PacketCodec.h"
+#include "protocol/RoomStateSnapshotCodec.h"
 
 #include <WinSock2.h>
 #include <WS2tcpip.h>
@@ -52,6 +53,34 @@ namespace
     private:
         SOCKET socket_ = INVALID_SOCKET;
     };
+
+    std::vector<std::uint8_t> ToBytes(
+        const std::string& value
+    )
+    {
+        return std::vector<std::uint8_t>(
+            value.begin(),
+            value.end()
+        );
+    }
+
+    void SendSessionPacket(
+        tdr::net::TcpClientSession& session,
+        const tdr::protocol::MessageType type,
+        const std::vector<std::uint8_t>& payload
+    )
+    {
+        const auto encoded =
+            tdr::protocol::PacketCodec::Encode(
+                type,
+                payload
+            );
+
+        session.ReceiveBytes(
+            encoded.data(),
+            encoded.size()
+        );
+    }
 
     TestSocket ConnectLoopback(
         unsigned short port
@@ -197,9 +226,391 @@ int main()
             return 1;
         }
 
+        SendSessionPacket(
+            session,
+            tdr::protocol::MessageType::SetNickname,
+            ToBytes("Host")
+        );
+
+        SendSessionPacket(
+            session,
+            tdr::protocol::MessageType::
+            CreateRoomRequest,
+            {}
+        );
+
+        const std::string roomId =
+            session.CurrentRoom().Id();
+
+        TestSocket guestClient =
+            ConnectLoopback(
+                listener.BoundPort()
+            );
+
+        auto guestConnection =
+            listener.Accept();
+
+        auto& guestSession =
+            server.AttachConnection(
+                std::move(guestConnection)
+            );
+
+        SendSessionPacket(
+            guestSession,
+            tdr::protocol::MessageType::SetNickname,
+            ToBytes("Guest")
+        );
+
+        SendSessionPacket(
+            guestSession,
+            tdr::protocol::MessageType::
+            JoinRoomRequest,
+            ToBytes(roomId)
+        );
+
+        const auto snapshotPayload =
+            tdr::protocol::
+            RoomStateSnapshotCodec::Encode(
+                server.BuildRoomStateSnapshot(
+                    roomId
+                )
+            );
+
+        const auto expectedBroadcast =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                RoomStateSnapshot,
+                snapshotPayload
+            );
+
+        server.BroadcastRoomState(
+            roomId
+        );
+
+        const auto hostBroadcast =
+            ReceiveExact(
+                client.NativeHandle(),
+                expectedBroadcast.size()
+            );
+
+        const auto guestBroadcast =
+            ReceiveExact(
+                guestClient.NativeHandle(),
+                expectedBroadcast.size()
+            );
+
+        if (hostBroadcast != expectedBroadcast)
+        {
+            std::cerr
+                << "[FAIL] Host received the wrong "
+                << "room snapshot broadcast."
+                << std::endl;
+
+            return 1;
+        }
+
+        if (guestBroadcast != expectedBroadcast)
+        {
+            std::cerr
+                << "[FAIL] Guest received the wrong "
+                << "room snapshot broadcast."
+                << std::endl;
+
+            return 1;
+        }
+
+        SendSessionPacket(
+            session,
+            tdr::protocol::MessageType::
+            SetPlayerSelection,
+            {
+                static_cast<std::uint8_t>(
+                    tdr::room::CharacterId::Ranged),
+                static_cast<std::uint8_t>(
+                    tdr::room::DifficultyId::Normal)
+            }
+        );
+
+        SendSessionPacket(
+            session,
+            tdr::protocol::MessageType::SetReady,
+            {
+                static_cast<std::uint8_t>(1)
+            }
+        );
+
+        SendSessionPacket(
+            guestSession,
+            tdr::protocol::MessageType::
+            SetPlayerSelection,
+            {
+                static_cast<std::uint8_t>(
+                    tdr::room::CharacterId::Melee),
+                static_cast<std::uint8_t>(
+                    tdr::room::DifficultyId::None)
+            }
+        );
+
+        SendSessionPacket(
+            guestSession,
+            tdr::protocol::MessageType::SetReady,
+            {
+                static_cast<std::uint8_t>(1)
+            }
+        );
+
+        SendSessionPacket(
+            session,
+            tdr::protocol::MessageType::
+            StartGameRequest,
+            {}
+        );
+
+        if (session.CurrentRoom().Status() !=
+            tdr::room::RoomStatus::Started)
+        {
+            std::cerr
+                << "[FAIL] GameStarted broadcast "
+                << "test room did not start."
+                << std::endl;
+
+            return 1;
+        }
+
+        const auto expectedGameStarted =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                GameStarted,
+                {}
+            );
+
+        server.BroadcastGameStarted(
+            roomId
+        );
+
+        const auto hostGameStarted =
+            ReceiveExact(
+                client.NativeHandle(),
+                expectedGameStarted.size()
+            );
+
+        const auto guestGameStarted =
+            ReceiveExact(
+                guestClient.NativeHandle(),
+                expectedGameStarted.size()
+            );
+
+        if (hostGameStarted != expectedGameStarted)
+        {
+            std::cerr
+                << "[FAIL] Host received the wrong "
+                << "GameStarted packet."
+                << std::endl;
+
+            return 1;
+        }
+
+        if (guestGameStarted != expectedGameStarted)
+        {
+            std::cerr
+                << "[FAIL] Guest received the wrong "
+                << "GameStarted packet."
+                << std::endl;
+
+            return 1;
+        }
+
+        SendSessionPacket(
+            session,
+            tdr::protocol::MessageType::LeaveRoom,
+            {}
+        );
+
+        const auto expectedForcedLeave =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::LeaveRoom,
+                {}
+            );
+
+        const std::string roomClosedMessage =
+            "Room was closed by the host.";
+
+        const std::vector<std::uint8_t>
+            roomClosedPayload(
+                roomClosedMessage.begin(),
+                roomClosedMessage.end()
+            );
+
+        const auto expectedRoomClosedError =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                ErrorMessage,
+                roomClosedPayload
+            );
+
+        server.NotifyRoomClosed(
+            roomId
+        );
+
+        const auto guestForcedLeave =
+            ReceiveExact(
+                guestClient.NativeHandle(),
+                expectedForcedLeave.size()
+            );
+
+        const auto guestRoomClosedError =
+            ReceiveExact(
+                guestClient.NativeHandle(),
+                expectedRoomClosedError.size()
+            );
+
+        if (guestForcedLeave != expectedForcedLeave)
+        {
+            std::cerr
+                << "[FAIL] Guest received the wrong "
+                << "forced LeaveRoom packet."
+                << std::endl;
+
+            return 1;
+        }
+
+        if (guestRoomClosedError !=
+            expectedRoomClosedError)
+        {
+            std::cerr
+                << "[FAIL] Guest received the wrong "
+                << "room-closed ErrorMessage."
+                << std::endl;
+
+            return 1;
+        }
+
+        if (guestSession.InvalidateRoom(
+            roomId))
+        {
+            std::cerr
+                << "[FAIL] Room-close notification "
+                << "did not clear the guest room reference."
+                << std::endl;
+
+            return 1;
+        }
+
+        tdr::net::ServerCoordinator
+            disconnectServer;
+
+        TestSocket disconnectHostClient =
+            ConnectLoopback(
+                listener.BoundPort()
+            );
+
+        auto disconnectHostConnection =
+            listener.Accept();
+
+        const SOCKET disconnectHostSocket =
+            disconnectHostConnection.NativeHandle();
+
+        auto& disconnectHostSession =
+            disconnectServer.AttachConnection(
+                std::move(disconnectHostConnection)
+            );
+
+        SendSessionPacket(
+            disconnectHostSession,
+            tdr::protocol::MessageType::SetNickname,
+            ToBytes("DisconnectHost")
+        );
+
+        SendSessionPacket(
+            disconnectHostSession,
+            tdr::protocol::MessageType::
+            CreateRoomRequest,
+            {}
+        );
+
+        static_cast<void>(
+            disconnectHostSession.TakeOutgoingPackets()
+            );
+
+        static_cast<void>(
+            disconnectHostSession.TakeChangedRoomIds()
+            );
+
+        TestSocket disconnectGuestClient =
+            ConnectLoopback(
+                listener.BoundPort()
+            );
+
+        auto disconnectGuestConnection =
+            listener.Accept();
+
+        auto& disconnectGuestSession =
+            disconnectServer.AttachConnection(
+                std::move(disconnectGuestConnection)
+            );
+
+        SendSessionPacket(
+            disconnectGuestSession,
+            tdr::protocol::MessageType::SetNickname,
+            ToBytes("DisconnectGuest")
+        );
+
+        SendSessionPacket(
+            disconnectGuestSession,
+            tdr::protocol::MessageType::
+            JoinRoomRequest,
+            ToBytes("ROOM-1")
+        );
+
+        static_cast<void>(
+            disconnectGuestSession.TakeOutgoingPackets()
+            );
+
+        static_cast<void>(
+            disconnectGuestSession.TakeChangedRoomIds()
+            );
+
+        disconnectServer.RemoveConnection(
+            disconnectHostSocket
+        );
+
+        const auto disconnectedGuestLeave =
+            ReceiveExact(
+                disconnectGuestClient.NativeHandle(),
+                expectedForcedLeave.size()
+            );
+
+        const auto disconnectedGuestError =
+            ReceiveExact(
+                disconnectGuestClient.NativeHandle(),
+                expectedRoomClosedError.size()
+            );
+
+        if (disconnectedGuestLeave !=
+            expectedForcedLeave)
+        {
+            std::cerr
+                << "[FAIL] Host TCP disconnect did "
+                << "not send LeaveRoom to the guest."
+                << std::endl;
+
+            return 1;
+        }
+
+        if (disconnectedGuestError !=
+            expectedRoomClosedError)
+        {
+            std::cerr
+                << "[FAIL] Host TCP disconnect did "
+                << "not send ErrorMessage to the guest."
+                << std::endl;
+
+            return 1;
+        }
+
         std::cout
-            << "[PASS] Server sent an encoded TCP "
-            << "packet to an IPv6 client."
+            << "[PASS] Server sends direct packets "
+            << "and broadcasts room snapshots."
             << std::endl;
 
         return 0;

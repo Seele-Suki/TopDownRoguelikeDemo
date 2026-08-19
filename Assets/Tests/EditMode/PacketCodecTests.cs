@@ -6,16 +6,18 @@ namespace TopDownRoguelike.Tests.EditMode
 {
     public sealed class PacketCodecTests
     {
+        private PacketCodec codec;
+
         [SetUp]
         public void SetUp()
         {
-            PacketCodec.Clear();
+            codec = new PacketCodec();
         }
 
         [TearDown]
         public void TearDown()
         {
-            PacketCodec.Clear();
+            codec.Clear();
         }
 
         [Test]
@@ -74,13 +76,13 @@ namespace TopDownRoguelike.Tests.EditMode
                 MessageType.SetNickname,
                 payload);
 
-            PacketCodec.Append(
+            codec.Append(
                 encoded,
                 0,
                 encoded.Length);
 
             Assert.That(
-                PacketCodec.TryDecode(out var decoded),
+                codec.TryDecode(out var decoded),
                 Is.True);
 
             Assert.That(
@@ -92,7 +94,7 @@ namespace TopDownRoguelike.Tests.EditMode
                 Is.EqualTo(payload));
 
             Assert.That(
-                PacketCodec.TryDecode(out _),
+                codec.TryDecode(out _),
                 Is.False);
         }
 
@@ -103,19 +105,19 @@ namespace TopDownRoguelike.Tests.EditMode
                 MessageType.ClientHello,
                 Array.Empty<byte>());
 
-            PacketCodec.Append(encoded, 0, 5);
+            codec.Append(encoded, 0, 5);
 
             Assert.That(
-                PacketCodec.TryDecode(out _),
+                codec.TryDecode(out _),
                 Is.False);
 
-            PacketCodec.Append(
+            codec.Append(
                 encoded,
                 5,
                 encoded.Length - 5);
 
             Assert.That(
-                PacketCodec.TryDecode(out var decoded),
+                codec.TryDecode(out var decoded),
                 Is.True);
 
             Assert.That(
@@ -138,22 +140,22 @@ namespace TopDownRoguelike.Tests.EditMode
             var firstChunkSize =
                 PacketCodec.MessageHeaderSize + 2;
 
-            PacketCodec.Append(
+            codec.Append(
                 encoded,
                 0,
                 firstChunkSize);
 
             Assert.That(
-                PacketCodec.TryDecode(out _),
+                codec.TryDecode(out _),
                 Is.False);
 
-            PacketCodec.Append(
+            codec.Append(
                 encoded,
                 firstChunkSize,
                 encoded.Length - firstChunkSize);
 
             Assert.That(
-                PacketCodec.TryDecode(out var decoded),
+                codec.TryDecode(out var decoded),
                 Is.True);
 
             Assert.That(
@@ -185,13 +187,13 @@ namespace TopDownRoguelike.Tests.EditMode
                 combined, first.Length,
                 second.Length);
 
-            PacketCodec.Append(
+            codec.Append(
                 combined,
                 0,
                 combined.Length);
 
             var packets =
-                PacketCodec.DecodeAvailable();
+                codec.DecodeAvailable();
 
             Assert.That(packets.Count, Is.EqualTo(2));
             Assert.That(
@@ -211,13 +213,13 @@ namespace TopDownRoguelike.Tests.EditMode
 
             encoded[PacketCodec.MagicOffset] = 0x00;
 
-            PacketCodec.Append(
+            codec.Append(
                 encoded,
                 0,
                 encoded.Length);
 
             var exception = Assert.Throws<PacketDecodeException>(
-                () => PacketCodec.TryDecode(out _));
+                () => codec.TryDecode(out _));
 
             Assert.That(
                 exception.Code,
@@ -236,17 +238,41 @@ namespace TopDownRoguelike.Tests.EditMode
             encoded[PacketCodec.PayloadSizeOffset + 2] = 0x00;
             encoded[PacketCodec.PayloadSizeOffset + 3] = 0x01;
 
-            PacketCodec.Append(
+            codec.Append(
                 encoded,
                 0,
                 encoded.Length);
 
             var exception = Assert.Throws<PacketDecodeException>(
-                () => PacketCodec.TryDecode(out _));
+                () => codec.TryDecode(out _));
 
             Assert.That(
                 exception.Code,
                 Is.EqualTo(PacketError.PayloadTooLarge));
+        }
+
+        [Test]
+        public void SeparateInstances_DoNotShareReceiveBuffers()
+        {
+            var firstCodec = new PacketCodec();
+            var secondCodec = new PacketCodec();
+
+            byte[] encoded = PacketCodec.Encode(
+                MessageType.ClientHello,
+                Array.Empty<byte>());
+
+            firstCodec.Append(
+                encoded,
+                0,
+                encoded.Length);
+
+            Assert.That(
+                firstCodec.TryDecode(out _),
+                Is.True);
+
+            Assert.That(
+                secondCodec.TryDecode(out _),
+                Is.False);
         }
     }
 }

@@ -1,7 +1,7 @@
-using System.Collections;
-using System.Net;
 using TMPro;
 using UnityEngine;
+using TopDownRoguelike.Networking.Client;
+using System;
 
 namespace TopDownRoguelike.Menu.UI
 {
@@ -16,26 +16,49 @@ namespace TopDownRoguelike.Menu.UI
         [Header("Room Lobby")]
         [SerializeField] private RoomLobbyView roomLobbyView;
 
-        [Header("Connection Simulation")]
+        [Header("Connection")]
         [SerializeField]
         private ConnectionStatusView connectionStatusView;
 
         [SerializeField]
-        [Min(0f)]
-        private float simulatedConnectionDelay = 0.8f;
+        private NetworkClientBehaviour networkClientBehaviour;
 
         [SerializeField]
-        private bool simulateConnectionFailure;
+        private string hostAddress = "::1";
+
+        [SerializeField]
+        [Range(1, 65535)]
+        private int hostPort = 7777;
 
         private bool isConnecting;
+        private IRoomNetworkClient networkClient;
+        private RoomConnectionFlow connectionFlow;
 
         [Header("Input")]
         [SerializeField] private TMP_InputField nicknameInput;
         [SerializeField] private TMP_InputField addressInput;
         [SerializeField] private TMP_InputField portInput;
+        [SerializeField] private TMP_InputField roomIdInput;
 
         [Header("Message")]
         [SerializeField] private TMP_Text validationText;
+
+        private void OnDestroy()
+        {
+            if (networkClient != null)
+            {
+                networkClient.StateChanged -=
+                    HandleNetworkClientStateChanged;
+            }
+
+            connectionFlow?.Dispose();
+
+            connectionFlow =
+                null;
+
+            networkClient =
+                null;
+        }
 
         private void Update()
         {
@@ -92,103 +115,31 @@ namespace TopDownRoguelike.Menu.UI
 
         public void HandleCreateRoom()
         {
-            if (nicknameInput == null)
+            RoomConnectionRequest request;
+
+            try
             {
-                ShowValidation("未配置昵称输入框");
-                return;
+                request =
+                    RoomConnectionRequest.CreateHost(
+                        nicknameInput == null
+                            ? null
+                            : nicknameInput.text,
+                        hostAddress,
+                        hostPort);
             }
-
-            string nickname = nicknameInput.text.Trim();
-
-            if (string.IsNullOrWhiteSpace(nickname))
+            catch (ArgumentException exception)
             {
-                ShowValidation("请输入玩家昵称");
-                nicknameInput.Select();
-                nicknameInput.ActivateInputField();
-                return;
-            }
+                ShowValidation(
+                    exception.Message);
 
-            if (roomLobbyPanel == null ||
-                roomLobbyView == null)
-            {
-                ShowValidation("房间准备面板未正确配置");
-                return;
-            }
+                if (exception.ParamName ==
+                        "nickname" &&
+                    nicknameInput != null)
+                {
+                    nicknameInput.Select();
+                    nicknameInput.ActivateInputField();
+                }
 
-            ClearValidation();
-
-            if (joinFields != null)
-            {
-                joinFields.SetActive(false);
-            }
-
-            if (multiplayerEntryPanel != null)
-            {
-                multiplayerEntryPanel.SetActive(false);
-            }
-
-            roomLobbyPanel.SetActive(true);
-            roomLobbyView.CreateLocalHostRoom(nickname);
-        }
-
-        public void HandleJoinRoom()
-        {
-            if (nicknameInput == null ||
-                addressInput == null ||
-                portInput == null)
-            {
-                ShowValidation("联机输入框未正确配置");
-                return;
-            }
-
-            string nickname = nicknameInput.text.Trim();
-            string address = addressInput.text.Trim();
-            string portText = portInput.text.Trim();
-
-            if (string.IsNullOrWhiteSpace(nickname))
-            {
-                ShowValidation("请输入玩家昵称");
-                nicknameInput.Select();
-                nicknameInput.ActivateInputField();
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(address))
-            {
-                ShowValidation("请输入房主 IP 地址");
-                addressInput.Select();
-                addressInput.ActivateInputField();
-                return;
-            }
-
-            if (!IPAddress.TryParse(address, out _))
-            {
-                ShowValidation("IP 地址格式不正确");
-                addressInput.Select();
-                addressInput.ActivateInputField();
-                return;
-            }
-
-            if (!int.TryParse(portText, out int port) ||
-                port < 1 ||
-                port > 65535)
-            {
-                ShowValidation("端口必须在 1 到 65535 之间");
-                portInput.Select();
-                portInput.ActivateInputField();
-                return;
-            }
-
-            if (roomLobbyPanel == null ||
-                roomLobbyView == null)
-            {
-                ShowValidation("房间准备面板未正确配置");
-                return;
-            }
-
-            if (connectionStatusView == null)
-            {
-                ShowValidation("连接状态面板未正确配置");
                 return;
             }
 
@@ -197,38 +148,11 @@ namespace TopDownRoguelike.Menu.UI
                 return;
             }
 
-            StartCoroutine(
-                SimulateJoinRoom(
-                    nickname,
-                    address,
-                    port));
-        }
-
-        private IEnumerator SimulateJoinRoom(
-            string nickname,
-            string address,
-            int port)
-        {
-            isConnecting = true;
-
-            connectionStatusView.ShowConnecting(
-                address,
-                port);
-
-            yield return new WaitForSecondsRealtime(
-                simulatedConnectionDelay);
-
-            if (simulateConnectionFailure)
+            if (!EnsureConnectionFlow())
             {
-                isConnecting = false;
-
-                connectionStatusView.ShowFailure(
-                    "无法连接到房主，请检查地址、端口和网络状态。");
-
-                yield break;
+                return;
             }
 
-            connectionStatusView.Hide();
             ClearValidation();
 
             if (joinFields != null)
@@ -236,22 +160,125 @@ namespace TopDownRoguelike.Menu.UI
                 joinFields.SetActive(false);
             }
 
-            if (multiplayerEntryPanel != null)
+            isConnecting =
+                true;
+
+            connectionStatusView?.ShowConnecting(
+                request.Address,
+                request.Port);
+
+            try
             {
-                multiplayerEntryPanel.SetActive(false);
+                connectionFlow.BeginHost(
+                    request);
+            }
+            catch (Exception exception)
+            {
+                isConnecting =
+                    false;
+
+                if (connectionStatusView != null)
+                {
+                    connectionStatusView.ShowFailure(
+                        exception.Message);
+                }
+                else
+                {
+                    ShowValidation(
+                        exception.Message);
+                }
+            }
+        }
+
+        public void HandleJoinRoom()
+        {
+            RoomConnectionRequest request;
+
+            try
+            {
+                request =
+                    RoomConnectionRequest.CreateJoin(
+                        nicknameInput == null
+                            ? null
+                            : nicknameInput.text,
+                        addressInput == null
+                            ? null
+                            : addressInput.text,
+                        portInput == null
+                            ? null
+                            : portInput.text,
+                        roomIdInput == null
+                            ? null
+                            : roomIdInput.text);
+            }
+            catch (ArgumentException exception)
+            {
+                ShowValidation(
+                    exception.Message);
+
+                FocusInputForParameter(
+                    exception.ParamName);
+
+                return;
             }
 
-            if (roomLobbyPanel != null)
+            if (isConnecting)
             {
-                roomLobbyPanel.SetActive(true);
+                return;
             }
 
-            roomLobbyView.CreateLocalClientRoom(
-                nickname,
-                address,
-                port);
+            if (!EnsureConnectionFlow())
+            {
+                return;
+            }
 
-            isConnecting = false;
+            ClearValidation();
+
+            isConnecting =
+                true;
+
+            connectionStatusView?.ShowConnecting(
+                request.Address,
+                request.Port);
+
+            try
+            {
+                connectionFlow.BeginJoin(
+                    request);
+            }
+            catch (Exception exception)
+            {
+                isConnecting =
+                    false;
+
+                if (connectionStatusView != null)
+                {
+                    connectionStatusView.ShowFailure(
+                        exception.Message);
+                }
+                else
+                {
+                    ShowValidation(
+                        exception.Message);
+                }
+            }
+        }
+
+        public void HandleConnectionFailureClosed()
+        {
+            connectionStatusView?.Hide();
+
+            isConnecting =
+                false;
+
+            if (networkClient == null ||
+                networkClient.State !=
+                    NetworkClientState.Error)
+            {
+                return;
+            }
+
+            networkClient.Disconnect();
         }
 
         public void ToggleJoinFields()
@@ -329,6 +356,132 @@ namespace TopDownRoguelike.Menu.UI
             }
 
             ClearValidation();
+        }
+
+        private void HandleNetworkClientStateChanged(
+            NetworkClientState state)
+        {
+            if (state ==
+                NetworkClientState.Error)
+            {
+                isConnecting =
+                    false;
+
+                string errorMessage =
+                    networkClient == null ||
+                    string.IsNullOrWhiteSpace(
+                        networkClient.LastError)
+                        ? "Unknown network error."
+                        : networkClient.LastError;
+
+                if (connectionStatusView != null)
+                {
+                    connectionStatusView.ShowFailure(
+                        errorMessage);
+                }
+                else
+                {
+                    ShowValidation(
+                        errorMessage);
+                }
+
+                return;
+            }
+
+            if (state !=
+                NetworkClientState.InRoom)
+            {
+                return;
+            }
+
+            isConnecting =
+                false;
+
+            connectionStatusView?.Hide();
+
+            ClearValidation();
+
+            if (joinFields != null)
+            {
+                joinFields.SetActive(false);
+            }
+
+            if (multiplayerEntryPanel != null)
+            {
+                multiplayerEntryPanel.SetActive(false);
+            }
+
+            if (roomLobbyPanel != null)
+            {
+                roomLobbyPanel.SetActive(true);
+            }
+        }
+
+        private void FocusInputForParameter(
+            string parameterName)
+        {
+            TMP_InputField targetInput = null;
+
+            switch (parameterName)
+            {
+                case "nickname":
+                    targetInput = nicknameInput;
+                    break;
+
+                case "address":
+                    targetInput = addressInput;
+                    break;
+
+                case "portText":
+                    targetInput = portInput;
+                    break;
+
+                case "roomId":
+                    targetInput = roomIdInput;
+                    break;
+            }
+
+            if (targetInput == null)
+            {
+                return;
+            }
+
+            targetInput.Select();
+            targetInput.ActivateInputField();
+        }
+
+        private bool EnsureConnectionFlow()
+        {
+            if (connectionFlow != null)
+            {
+                return true;
+            }
+
+            NetworkClientBehaviour behaviour =
+                networkClientBehaviour != null
+                    ? networkClientBehaviour
+                    : NetworkClientBehaviour.Instance;
+
+            if (behaviour == null ||
+                behaviour.Client == null)
+            {
+                ShowValidation(
+                    "网络客户端尚未初始化。");
+
+                return false;
+            }
+
+            networkClient =
+                behaviour.Client;
+
+            connectionFlow =
+                new RoomConnectionFlow(
+                    networkClient);
+
+            networkClient.StateChanged +=
+                HandleNetworkClientStateChanged;
+
+            return true;
         }
 
         private void ShowValidation(string message)

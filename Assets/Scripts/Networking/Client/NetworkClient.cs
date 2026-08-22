@@ -7,7 +7,8 @@ using TopDownRoguelike.Networking.Transport;
 namespace TopDownRoguelike.Networking.Client
 {
     public sealed class NetworkClient
-        : IDisposable
+        : IRoomNetworkClient,
+          IDisposable
     {
         private static readonly Encoding StrictUtf8 =
             new UTF8Encoding(

@@ -1,4 +1,5 @@
 using System;
+using TopDownRoguelike.Networking.Protocol;
 
 namespace TopDownRoguelike.Networking.Client
 {
@@ -7,12 +8,30 @@ namespace TopDownRoguelike.Networking.Client
         event Action<NetworkClientState>
             StateChanged;
 
+        event Action<RoomStateSnapshot>
+            RoomStateChanged;
+
         NetworkClientState State
         {
             get;
         }
 
         string LastError
+        {
+            get;
+        }
+
+        uint PlayerId
+        {
+            get;
+        }
+
+        string CurrentRoomId
+        {
+            get;
+        }
+
+        RoomStateSnapshot CurrentRoomState
         {
             get;
         }
@@ -25,8 +44,7 @@ namespace TopDownRoguelike.Networking.Client
             string nickname);
 
         void JoinRoom(
-            string nickname,
-            string roomId);
+            string nickname);
 
         void Disconnect();
     }

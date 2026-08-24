@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using TopDownRoguelike.Networking.Client;
+using TopDownRoguelike.Networking.Protocol;
 using System;
 
 namespace TopDownRoguelike.Menu.UI
@@ -24,6 +25,9 @@ namespace TopDownRoguelike.Menu.UI
         private NetworkClientBehaviour networkClientBehaviour;
 
         [SerializeField]
+        private ServerProcessLauncher serverProcessLauncher;
+
+        [SerializeField]
         private string hostAddress = "::1";
 
         [SerializeField]
@@ -38,7 +42,6 @@ namespace TopDownRoguelike.Menu.UI
         [SerializeField] private TMP_InputField nicknameInput;
         [SerializeField] private TMP_InputField addressInput;
         [SerializeField] private TMP_InputField portInput;
-        [SerializeField] private TMP_InputField roomIdInput;
 
         [Header("Message")]
         [SerializeField] private TMP_Text validationText;
@@ -49,6 +52,9 @@ namespace TopDownRoguelike.Menu.UI
             {
                 networkClient.StateChanged -=
                     HandleNetworkClientStateChanged;
+
+                networkClient.RoomStateChanged -=
+                    HandleRoomStateChanged;
             }
 
             connectionFlow?.Dispose();
@@ -160,15 +166,17 @@ namespace TopDownRoguelike.Menu.UI
                 joinFields.SetActive(false);
             }
 
-            isConnecting =
-                true;
-
-            connectionStatusView?.ShowConnecting(
-                request.Address,
-                request.Port);
-
             try
             {
+                serverProcessLauncher?.PrepareForHost();
+
+                isConnecting =
+                    true;
+
+                connectionStatusView?.ShowConnecting(
+                    request.Address,
+                    request.Port);
+
                 connectionFlow.BeginHost(
                     request);
             }
@@ -206,10 +214,7 @@ namespace TopDownRoguelike.Menu.UI
                             : addressInput.text,
                         portInput == null
                             ? null
-                            : portInput.text,
-                        roomIdInput == null
-                            ? null
-                            : roomIdInput.text);
+                            : portInput.text);
             }
             catch (ArgumentException exception)
             {
@@ -397,6 +402,15 @@ namespace TopDownRoguelike.Menu.UI
             isConnecting =
                 false;
 
+            if (networkClient != null)
+            {
+                networkClient.RoomStateChanged -=
+                    HandleRoomStateChanged;
+
+                networkClient.RoomStateChanged +=
+                    HandleRoomStateChanged;
+            }
+
             connectionStatusView?.Hide();
 
             ClearValidation();
@@ -417,6 +431,20 @@ namespace TopDownRoguelike.Menu.UI
             }
         }
 
+        private void HandleRoomStateChanged(
+            RoomStateSnapshot snapshot)
+        {
+            if (roomLobbyView == null ||
+                networkClient == null)
+            {
+                return;
+            }
+
+            roomLobbyView.ApplyNetworkRoomState(
+                snapshot,
+                networkClient.PlayerId);
+        }
+
         private void FocusInputForParameter(
             string parameterName)
         {
@@ -434,10 +462,6 @@ namespace TopDownRoguelike.Menu.UI
 
                 case "portText":
                     targetInput = portInput;
-                    break;
-
-                case "roomId":
-                    targetInput = roomIdInput;
                     break;
             }
 

@@ -321,18 +321,15 @@ namespace tdr::net
                 );
             }
 
-            const std::string requestedRoomId(
-                packet.payload.begin(),
-                packet.payload.end()
-            );
-
-            if (requestedRoomId.empty())
+            if (!packet.payload.empty())
             {
                 throw std::invalid_argument(
-                    "Join room request must contain "
-                    "a room ID."
+                    "Join room request payload must be empty."
                 );
             }
+
+            const std::string requestedRoomId =
+                roomManager_.FindSingleWaitingRoom().Id();
 
             roomManager_.AddPlayer(
                 requestedRoomId,

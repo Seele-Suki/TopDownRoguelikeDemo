@@ -11,6 +11,64 @@ namespace TopDownRoguelike.Tests.EditMode
     public sealed class ServerProcessLauncherTests
     {
         [Test]
+        public void PrepareForHost_ManualMode_DoesNotStartProcess()
+        {
+            var gameObject =
+                new GameObject("ServerProcessLauncherTests");
+
+            try
+            {
+                var launcher =
+                    gameObject.AddComponent<
+                        TopDownRoguelike.Networking.Client
+                            .ServerProcessLauncher>();
+
+                MethodInfo prepareMethod =
+                    launcher.GetType().GetMethod(
+                        "PrepareForHost",
+                        BindingFlags.Instance |
+                        BindingFlags.Public);
+
+                Assert.That(
+                    prepareMethod,
+                    Is.Not.Null,
+                    "Launcher must expose PrepareForHost().");
+
+                prepareMethod.Invoke(
+                    launcher,
+                    null);
+
+                Assert.That(
+                    launcher.HasStartedServerProcess,
+                    Is.False,
+                    "Manual mode must use an externally started server.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    gameObject);
+            }
+        }
+
+        [Test]
+        public void Component_DoesNotStartServerFromUnityStart()
+        {
+            MethodInfo startMethod =
+                typeof(
+                    TopDownRoguelike.Networking.Client
+                        .ServerProcessLauncher)
+                .GetMethod(
+                    "Start",
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic);
+
+            Assert.That(
+                startMethod,
+                Is.Null,
+                "Server startup must wait for the host creation command.");
+        }
+
+        [Test]
         public void OnDestroy_StopsOwnedServerProcess()
         {
             var gameObject =

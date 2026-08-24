@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using NUnit.Framework;
 using TopDownRoguelike.Networking.Client;
+using TopDownRoguelike.Networking.Protocol;
 
 namespace TopDownRoguelike.Tests.EditMode
 {
@@ -94,8 +95,7 @@ namespace TopDownRoguelike.Tests.EditMode
                     RoomConnectionRequest.CreateJoin(
                         " Bronya ",
                         " ::1 ",
-                        " 7777 ",
-                        " ROOM-1 ");
+                        " 7777 ");
 
                 beginJoinMethod.Invoke(
                     flow,
@@ -127,10 +127,6 @@ namespace TopDownRoguelike.Tests.EditMode
                 Assert.That(
                     client.LastNickname,
                     Is.EqualTo("Bronya"));
-
-                Assert.That(
-                    client.LastRoomId,
-                    Is.EqualTo("ROOM-1"));
 
                 Assert.That(
                     client.CreateRoomCallCount,
@@ -246,6 +242,36 @@ namespace TopDownRoguelike.Tests.EditMode
                 Is.Not.Null);
 
             Assert.That(
+                contractType.GetEvent("RoomStateChanged"),
+                Is.Not.Null,
+                "IRoomNetworkClient must expose RoomStateChanged.");
+
+            Assert.That(
+                contractType.GetProperty("PlayerId"),
+                Is.Not.Null,
+                "IRoomNetworkClient must expose PlayerId.");
+
+            Assert.That(
+                contractType.GetProperty("CurrentRoomId"),
+                Is.Not.Null,
+                "IRoomNetworkClient must expose CurrentRoomId.");
+
+            PropertyInfo currentRoomStateProperty =
+                contractType.GetProperty(
+                    "CurrentRoomState");
+
+            Assert.That(
+                currentRoomStateProperty,
+                Is.Not.Null,
+                "IRoomNetworkClient must expose CurrentRoomState.");
+
+            Assert.That(
+                currentRoomStateProperty.PropertyType.FullName,
+                Is.EqualTo(
+                    "TopDownRoguelike.Networking.Protocol." +
+                    "RoomStateSnapshot"));
+
+            Assert.That(
                 contractType.GetMethod("Connect"),
                 Is.Not.Null);
 
@@ -253,9 +279,30 @@ namespace TopDownRoguelike.Tests.EditMode
                 contractType.GetMethod("CreateRoom"),
                 Is.Not.Null);
 
+            MethodInfo joinRoomMethod =
+                contractType.GetMethod(
+                    "JoinRoom",
+                    new[]
+                    {
+                        typeof(string)
+                    });
+
             Assert.That(
-                contractType.GetMethod("JoinRoom"),
-                Is.Not.Null);
+                joinRoomMethod,
+                Is.Not.Null,
+                "IRoomNetworkClient must define " +
+                "JoinRoom(string nickname).");
+
+            Assert.That(
+                contractType.GetMethod(
+                    "JoinRoom",
+                    new[]
+                    {
+            typeof(string),
+            typeof(string)
+                    }),
+                Is.Null,
+                "IRoomNetworkClient must not require a room ID.");
 
             Assert.That(
                 contractType.GetMethod("Disconnect"),
@@ -267,6 +314,26 @@ namespace TopDownRoguelike.Tests.EditMode
         {
             public event Action<NetworkClientState>
                 StateChanged;
+
+            public event Action<RoomStateSnapshot>
+                RoomStateChanged
+            {
+                add
+                {
+                }
+                remove
+                {
+                }
+            }
+
+            public uint PlayerId =>
+                0u;
+
+            public string CurrentRoomId =>
+                string.Empty;
+
+            public RoomStateSnapshot CurrentRoomState =>
+                null;
 
             public NetworkClientState State
             {
@@ -316,12 +383,6 @@ namespace TopDownRoguelike.Tests.EditMode
                 private set;
             } = string.Empty;
 
-            public string LastRoomId
-            {
-                get;
-                private set;
-            } = string.Empty;
-
             public void Connect(
                 string address,
                 int port)
@@ -342,12 +403,10 @@ namespace TopDownRoguelike.Tests.EditMode
             }
 
             public void JoinRoom(
-                string nickname,
-                string roomId)
+                string nickname)
             {
                 JoinRoomCallCount++;
                 LastNickname = nickname;
-                LastRoomId = roomId;
             }
 
             public void Disconnect()

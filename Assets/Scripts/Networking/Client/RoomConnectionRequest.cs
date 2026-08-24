@@ -9,8 +9,7 @@ namespace TopDownRoguelike.Networking.Client
         private RoomConnectionRequest(
             string nickname,
             string address,
-            int port,
-            string roomId)
+            int port)
         {
             Nickname =
                 nickname;
@@ -20,9 +19,6 @@ namespace TopDownRoguelike.Networking.Client
 
             Port =
                 port;
-
-            RoomId =
-                roomId;
         }
 
         public string Nickname
@@ -36,11 +32,6 @@ namespace TopDownRoguelike.Networking.Client
         }
 
         public int Port
-        {
-            get;
-        }
-
-        public string RoomId
         {
             get;
         }
@@ -82,15 +73,13 @@ namespace TopDownRoguelike.Networking.Client
             return new RoomConnectionRequest(
                 normalizedNickname,
                 normalizedAddress,
-                port,
-                string.Empty);
+                port);
         }
 
         public static RoomConnectionRequest CreateJoin(
             string nickname,
             string address,
-            string portText,
-            string roomId)
+            string portText)
         {
             string normalizedNickname =
                 NormalizeRequired(
@@ -132,17 +121,10 @@ namespace TopDownRoguelike.Networking.Client
                     "Port must be between 1 and 65535.");
             }
 
-            string normalizedRoomId =
-                NormalizeRequired(
-                    roomId,
-                    nameof(roomId),
-                    "Room ID cannot be empty.");
-
             return new RoomConnectionRequest(
                 normalizedNickname,
                 normalizedAddress,
-                port,
-                normalizedRoomId);
+                port);
         }
 
         private static string NormalizeRequired(

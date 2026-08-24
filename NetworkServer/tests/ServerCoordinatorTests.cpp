@@ -543,7 +543,7 @@ int main()
         SendPacket(
             guestSession,
             tdr::protocol::MessageType::JoinRoomRequest,
-            ToBytes(roomId)
+            {}
         );
 
         if (!guestSession.HasRoom())

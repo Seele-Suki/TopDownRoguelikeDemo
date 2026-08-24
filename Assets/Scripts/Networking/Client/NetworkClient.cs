@@ -42,9 +42,6 @@ namespace TopDownRoguelike.Networking.Client
 
         private uint pendingBindSequence;
 
-        private string pendingRoomId =
-            string.Empty;
-
         private bool disposed;
 
         public NetworkClient()
@@ -165,9 +162,6 @@ namespace TopDownRoguelike.Networking.Client
             CurrentRoomState =
                 null;
 
-            pendingRoomId =
-                string.Empty;
-
             nextUdpSequence =
                 1u;
 
@@ -245,8 +239,7 @@ namespace TopDownRoguelike.Networking.Client
         }
 
         public void JoinRoom(
-    string nickname,
-    string roomId)
+            string nickname)
         {
             ThrowIfDisposed();
 
@@ -266,27 +259,12 @@ namespace TopDownRoguelike.Networking.Client
                     nameof(nickname));
             }
 
-            if (string.IsNullOrWhiteSpace(
-                roomId))
-            {
-                throw new ArgumentException(
-                    "Room ID cannot be empty.",
-                    nameof(roomId));
-            }
-
             string normalizedNickname =
                 nickname.Trim();
-
-            string normalizedRoomId =
-                roomId.Trim();
 
             byte[] nicknamePayload =
                 StrictUtf8.GetBytes(
                     normalizedNickname);
-
-            byte[] roomIdPayload =
-                StrictUtf8.GetBytes(
-                    normalizedRoomId);
 
             try
             {
@@ -296,10 +274,7 @@ namespace TopDownRoguelike.Networking.Client
 
                 tcpTransport.Send(
                     MessageType.JoinRoomRequest,
-                    roomIdPayload);
-
-                pendingRoomId =
-                    normalizedRoomId;
+                    Array.Empty<byte>());
 
                 TransitionTo(
                     NetworkClientState.JoiningRoom);
@@ -722,21 +697,8 @@ namespace TopDownRoguelike.Networking.Client
                         "an empty room ID.");
                 }
 
-                if (!string.Equals(
-                    roomId,
-                    pendingRoomId,
-                    StringComparison.Ordinal))
-                {
-                    throw new InvalidOperationException(
-                        "JoinRoomResponse room ID does not " +
-                        "match the requested room.");
-                }
-
                 CurrentRoomId =
                     roomId;
-
-                pendingRoomId =
-                    string.Empty;
 
                 TransitionTo(
                     NetworkClientState.InRoom);
@@ -804,9 +766,6 @@ namespace TopDownRoguelike.Networking.Client
                     State ==
                         NetworkClientState.JoiningRoom)
                 {
-                    pendingRoomId =
-                        string.Empty;
-
                     TransitionTo(
                         NetworkClientState.Connected);
                 }
@@ -857,9 +816,6 @@ namespace TopDownRoguelike.Networking.Client
 
                 CurrentRoomState =
                     null;
-
-                pendingRoomId =
-                    string.Empty;
 
                 TransitionTo(
                     NetworkClientState.Connected);
@@ -1023,9 +979,6 @@ namespace TopDownRoguelike.Networking.Client
 
             CurrentRoomState =
                 null;
-
-            pendingRoomId =
-                string.Empty;
 
             PlayerId =
                 0u;

@@ -265,7 +265,7 @@ int main()
             guestSession,
             tdr::protocol::MessageType::
             JoinRoomRequest,
-            ToBytes(roomId)
+            {}
         );
 
         const auto snapshotPayload =
@@ -559,7 +559,7 @@ int main()
             disconnectGuestSession,
             tdr::protocol::MessageType::
             JoinRoomRequest,
-            ToBytes("ROOM-1")
+            {}
         );
 
         static_cast<void>(

@@ -1,9 +1,11 @@
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using TopDownRoguelike.Infrastructure;
 using TopDownRoguelike.Menu.UI;
 using TopDownRoguelike.Networking.Room;
+using TopDownRoguelike.Networking.Protocol;
 
 public class RoomLobbyView : MonoBehaviour
 {
@@ -29,8 +31,8 @@ public class RoomLobbyView : MonoBehaviour
 
     private RoomState roomState;
 
-    private const int HostPlayerId = 1;
-    private const int ClientPlayerId = 2;
+    private int displayedHostPlayerId;
+    private int displayedClientPlayerId;
 
     private int localPlayerId;
     private RoomRole localRole = RoomRole.None;
@@ -67,113 +69,96 @@ public class RoomLobbyView : MonoBehaviour
         }
     }
 
-    public void CreateLocalHostRoom(string hostNickname)
+    public void ApplyNetworkRoomState(
+        RoomStateSnapshot snapshot,
+        uint networkLocalPlayerId)
     {
-        roomState = new RoomState();
-
-        localPlayerId = HostPlayerId;
-        localRole = RoomRole.Host;
-        connectedAddress = string.Empty;
-        connectedPort = 0;
-
-        bool hostAdded = roomState.TryAddPlayer(
-            HostPlayerId,
-            hostNickname,
-            RoomRole.Host);
-
-        if (!hostAdded)
+        if (snapshot == null)
         {
-            ShowMessage("创建房间失败");
-            return;
+            throw new ArgumentNullException(
+                nameof(snapshot));
         }
 
-        roomState.TrySelectDifficulty(
-            HostPlayerId,
-            DifficultyId.Normal);
+        roomState =
+            new RoomState();
 
-        bool clientAdded = roomState.TryAddPlayer(
-            ClientPlayerId,
-            "模拟加入者",
-            RoomRole.Client);
+        displayedHostPlayerId =
+            0;
 
-        if (!clientAdded)
+        displayedClientPlayerId =
+            0;
+
+        foreach (RoomPlayerSnapshot player
+            in snapshot.Players)
         {
-            ShowMessage("模拟加入者进入失败");
-            return;
+            int playerId =
+                checked((int)player.PlayerId);
+
+            RoomRole role =
+                player.IsHost
+                    ? RoomRole.Host
+                    : RoomRole.Client;
+
+            roomState.TryAddPlayer(
+                playerId,
+                player.Nickname,
+                role);
+
+            if (player.Character !=
+                CharacterId.None)
+            {
+                roomState.TrySelectCharacter(
+                    playerId,
+                    player.Character);
+            }
+
+            if (player.IsReady)
+            {
+                roomState.TrySetReady(
+                    playerId,
+                    true);
+            }
+
+            if (player.IsHost)
+            {
+                displayedHostPlayerId =
+                    playerId;
+            }
+            else if (displayedClientPlayerId == 0)
+            {
+                displayedClientPlayerId =
+                    playerId;
+            }
         }
 
-        roomState.TrySelectCharacter(
-            ClientPlayerId,
-            CharacterId.Ranged);
+        if (displayedHostPlayerId != 0 &&
+            snapshot.SelectedDifficulty !=
+                DifficultyId.None)
+        {
+            roomState.TrySelectDifficulty(
+                displayedHostPlayerId,
+                snapshot.SelectedDifficulty);
+        }
 
-        roomState.TrySetReady(
-            ClientPlayerId,
-            true);
+        localPlayerId =
+            checked((int)networkLocalPlayerId);
 
-        RefreshView();
+        RoomPlayerState localPlayer =
+            roomState.GetPlayer(
+                localPlayerId);
+
+        localRole =
+            localPlayer == null
+                ? RoomRole.None
+                : localPlayer.Role;
 
         if (readyButton != null)
         {
-            readyButton.interactable = true;
-        }
-
-        ShowMessage("模拟加入者已准备，请房主确认准备");
-    }
-
-    public void CreateLocalClientRoom(
-    string clientNickname,
-    string address,
-    int port)
-    {
-        roomState = new RoomState();
-
-        localPlayerId = ClientPlayerId;
-        localRole = RoomRole.Client;
-        connectedAddress = address;
-        connectedPort = port;
-
-        bool hostAdded = roomState.TryAddPlayer(
-            HostPlayerId,
-            "模拟房主",
-            RoomRole.Host);
-
-        if (!hostAdded)
-        {
-            ShowMessage("模拟房主创建失败");
-            return;
-        }
-
-        roomState.TrySelectCharacter(
-            HostPlayerId,
-            CharacterId.Ranged);
-
-        roomState.TrySelectDifficulty(
-            HostPlayerId,
-            DifficultyId.Normal);
-
-        roomState.TrySetReady(
-            HostPlayerId,
-            true);
-
-        bool clientAdded = roomState.TryAddPlayer(
-            ClientPlayerId,
-            clientNickname,
-            RoomRole.Client);
-
-        if (!clientAdded)
-        {
-            ShowMessage("加入房间失败");
-            return;
+            readyButton.interactable =
+                localPlayer != null;
         }
 
         RefreshView();
-
-        if (readyButton != null)
-        {
-            readyButton.interactable = true;
-        }
-
-        ShowMessage("已进入模拟房间，请确认准备");
     }
 
     private void SelectLocalRangedCharacter()
@@ -282,10 +267,12 @@ public class RoomLobbyView : MonoBehaviour
         }
 
         RoomPlayerState hostPlayer =
-            roomState.GetPlayer(HostPlayerId);
+            roomState.GetPlayer(
+                displayedHostPlayerId);
 
         RoomPlayerState clientPlayer =
-            roomState.GetPlayer(ClientPlayerId);
+            roomState.GetPlayer(
+                displayedClientPlayerId);
 
         RoomPlayerState localPlayer =
             roomState.GetPlayer(localPlayerId);
@@ -300,12 +287,14 @@ public class RoomLobbyView : MonoBehaviour
         }
 
         bool canEditHost =
-            localPlayerId == HostPlayerId &&
+            localPlayerId ==
+                displayedHostPlayerId &&
             hostPlayer != null &&
             !hostPlayer.IsReady;
 
         bool canEditClient =
-            localPlayerId == ClientPlayerId &&
+            localPlayerId ==
+                displayedClientPlayerId &&
             clientPlayer != null &&
             !clientPlayer.IsReady;
 
@@ -385,6 +374,12 @@ public class RoomLobbyView : MonoBehaviour
             roomState.Reset();
             roomState = null;
         }
+
+        displayedHostPlayerId =
+            0;
+
+        displayedClientPlayerId =
+            0;
 
         localPlayerId = 0;
         localRole = RoomRole.None;

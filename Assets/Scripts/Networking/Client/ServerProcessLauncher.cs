@@ -49,24 +49,14 @@ namespace TopDownRoguelike.Networking.Client
             startedProcess != null &&
             !startedProcess.HasExited;
 
-        private void Start()
+        public void PrepareForHost()
         {
             if (!ShouldStartAutomatically)
             {
                 return;
             }
 
-            try
-            {
-                StartConfiguredServer();
-            }
-            catch (Exception exception)
-            {
-                Debug.LogError(
-                    "Failed to start NetworkServer: " +
-                    exception.Message,
-                    this);
-            }
+            StartConfiguredServer();
         }
 
         private void OnDestroy()

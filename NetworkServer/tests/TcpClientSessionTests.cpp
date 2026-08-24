@@ -170,7 +170,7 @@ namespace
             guest,
             tdr::protocol::MessageType::
             JoinRoomRequest,
-            ToBytes("ROOM-1")
+            {}
         );
 
         static_cast<void>(
@@ -625,7 +625,7 @@ int main()
     SendPacket(
         joiningSession,
         tdr::protocol::MessageType::JoinRoomRequest,
-        ToBytes(roomId)
+        {}
     );
 
     const auto initialJoinResponses =
@@ -743,7 +743,7 @@ int main()
     SendPacket(
         joiningSession,
         tdr::protocol::MessageType::JoinRoomRequest,
-        ToBytes(roomId)
+        {}
     );
 
     const auto joinResponses =

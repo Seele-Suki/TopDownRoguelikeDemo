@@ -250,6 +250,12 @@ namespace tdr::room
         return status_;
     }
 
+    bool Room::CanAcceptPlayer() const noexcept
+    {
+        return status_ == RoomStatus::Waiting
+            && players_.size() < kMaxPlayers;
+    }
+
     DifficultyId
         Room::SelectedDifficulty() const noexcept
     {

@@ -63,6 +63,40 @@ namespace tdr::room
         );
     }
 
+    Room& RoomManager::FindSingleWaitingRoom()
+    {
+        Room* waitingRoom = nullptr;
+
+        for (auto& entry : rooms_)
+        {
+            Room& candidate = entry.second;
+
+            if (!candidate.CanAcceptPlayer())
+            {
+                continue;
+            }
+
+            if (waitingRoom != nullptr)
+            {
+                throw std::runtime_error(
+                    "Multiple waiting rooms require "
+                    "a room ID."
+                );
+            }
+
+            waitingRoom = &candidate;
+        }
+
+        if (waitingRoom == nullptr)
+        {
+            throw std::runtime_error(
+                "No waiting room is available."
+            );
+        }
+
+        return *waitingRoom;
+    }
+
     void RoomManager::RemovePlayer(
         const std::string& roomId,
         const std::uint32_t playerId

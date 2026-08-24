@@ -88,6 +88,9 @@ namespace tdr::room
         RoomStatus Status() const noexcept;
 
         [[nodiscard]]
+        bool CanAcceptPlayer() const noexcept;
+
+        [[nodiscard]]
         std::size_t PlayerCount() const noexcept;
 
         [[nodiscard]]

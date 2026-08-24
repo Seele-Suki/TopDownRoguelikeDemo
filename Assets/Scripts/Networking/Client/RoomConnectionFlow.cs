@@ -34,15 +34,6 @@ namespace TopDownRoguelike.Networking.Client
                     nameof(request));
             }
 
-            if (!string.IsNullOrEmpty(
-                request.RoomId))
-            {
-                throw new ArgumentException(
-                    "Host request must not contain " +
-                    "a room ID.",
-                    nameof(request));
-            }
-
             if (client.State !=
                 NetworkClientState.Disconnected)
             {
@@ -78,14 +69,6 @@ namespace TopDownRoguelike.Networking.Client
             if (request == null)
             {
                 throw new ArgumentNullException(
-                    nameof(request));
-            }
-
-            if (string.IsNullOrWhiteSpace(
-                request.RoomId))
-            {
-                throw new ArgumentException(
-                    "Join request must contain a room ID.",
                     nameof(request));
             }
 
@@ -168,8 +151,7 @@ namespace TopDownRoguelike.Networking.Client
             }
 
             client.JoinRoom(
-                request.Nickname,
-                request.RoomId);
+                request.Nickname);
         }
 
         private void ClearPendingRequest()

@@ -720,14 +720,7 @@ int main()
             guestSession,
             tdr::protocol::MessageType::
             JoinRoomRequest,
-            {
-                static_cast<std::uint8_t>('R'),
-                static_cast<std::uint8_t>('O'),
-                static_cast<std::uint8_t>('O'),
-                static_cast<std::uint8_t>('M'),
-                static_cast<std::uint8_t>('-'),
-                static_cast<std::uint8_t>('1')
-            }
+            {}
         );
 
         static_cast<void>(
@@ -1375,14 +1368,7 @@ int main()
             tdr::protocol::PacketCodec::Encode(
                 tdr::protocol::MessageType::
                 JoinRoomRequest,
-                {
-                    static_cast<std::uint8_t>('R'),
-                    static_cast<std::uint8_t>('O'),
-                    static_cast<std::uint8_t>('O'),
-                    static_cast<std::uint8_t>('M'),
-                    static_cast<std::uint8_t>('-'),
-                    static_cast<std::uint8_t>('2')
-                }
+                {}
             );
 
         std::vector<std::uint8_t>

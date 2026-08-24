@@ -23,6 +23,9 @@ namespace tdr::room
             const std::string& nickname
         );
 
+        [[nodiscard]]
+        Room& FindSingleWaitingRoom();
+
         void RemovePlayer(
             const std::string& roomId,
             std::uint32_t playerId

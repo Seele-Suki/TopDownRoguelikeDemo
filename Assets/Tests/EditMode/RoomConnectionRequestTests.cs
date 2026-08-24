@@ -7,53 +7,66 @@ namespace TopDownRoguelike.Tests.EditMode
 {
     public sealed class RoomConnectionRequestTests
     {
+        [Test]
+        public void RequestModel_DoesNotExposeRoomIdOrLegacyJoinFactory()
+        {
+            Type requestType =
+                typeof(RoomConnectionRequest);
+
+            Assert.That(
+                requestType.GetProperty("RoomId"),
+                Is.Null,
+                "RoomConnectionRequest must not expose RoomId.");
+
+            Assert.That(
+                requestType.GetMethod(
+                    "CreateJoin",
+                    new[]
+                    {
+                typeof(string),
+                typeof(string),
+                typeof(string),
+                typeof(string)
+                    }),
+                Is.Null,
+                "The four-argument CreateJoin overload " +
+                "must be removed.");
+        }
+
         [TestCase(
             null,
             "::1",
             "7777",
-            "ROOM-1",
             "nickname")]
         [TestCase(
             "   ",
             "::1",
             "7777",
-            "ROOM-1",
             "nickname")]
         [TestCase(
             "Seele",
             "not-an-ip",
             "7777",
-            "ROOM-1",
             "address")]
         [TestCase(
             "Seele",
             "::1",
             "abc",
-            "ROOM-1",
             "portText")]
         [TestCase(
             "Seele",
             "::1",
             "0",
-            "ROOM-1",
             "portText")]
         [TestCase(
             "Seele",
             "::1",
             "65536",
-            "ROOM-1",
             "portText")]
-        [TestCase(
-            "Seele",
-            "::1",
-            "7777",
-            "   ",
-            "roomId")]
         public void CreateJoin_InvalidInput_ReportsParameter(
             string nickname,
             string address,
             string portText,
-            string roomId,
             string expectedParameter)
         {
             ArgumentException exception =
@@ -62,8 +75,7 @@ namespace TopDownRoguelike.Tests.EditMode
                     RoomConnectionRequest.CreateJoin(
                         nickname,
                         address,
-                        portText,
-                        roomId));
+                        portText));
 
             Assert.That(
                 exception.ParamName,
@@ -71,7 +83,7 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
-        public void CreateHost_UsesEndpointWithoutRoomId()
+        public void CreateHost_NormalizesEndpoint()
         {
             MethodInfo createHostMethod =
                 typeof(RoomConnectionRequest).GetMethod(
@@ -106,10 +118,6 @@ namespace TopDownRoguelike.Tests.EditMode
             Assert.That(
                 request.Port,
                 Is.EqualTo(7777));
-
-            Assert.That(
-                request.RoomId,
-                Is.Empty);
         }
 
         [Test]
@@ -129,7 +137,15 @@ namespace TopDownRoguelike.Tests.EditMode
                 requestType.GetMethod(
                     "CreateJoin",
                     BindingFlags.Public |
-                    BindingFlags.Static);
+                    BindingFlags.Static,
+                    null,
+                    new[]
+                    {
+                        typeof(string),
+                        typeof(string),
+                        typeof(string)
+                    },
+                    null);
 
             Assert.That(createJoinMethod, Is.Not.Null);
 
@@ -140,8 +156,7 @@ namespace TopDownRoguelike.Tests.EditMode
                     {
                         " Seele ",
                         " ::1 ",
-                        " 7777 ",
-                        " ROOM-1 "
+                        " 7777 "
                     });
 
             Assert.That(
@@ -164,13 +179,6 @@ namespace TopDownRoguelike.Tests.EditMode
                     request,
                     "Port"),
                 Is.EqualTo(7777));
-
-            Assert.That(
-                GetProperty<string>(
-                    requestType,
-                    request,
-                    "RoomId"),
-                Is.EqualTo("ROOM-1"));
         }
 
         private static T GetProperty<T>(

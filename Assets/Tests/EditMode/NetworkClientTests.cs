@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Reflection;
 using NUnit.Framework;
 using TopDownRoguelike.Networking.Client;
 using TopDownRoguelike.Networking.Protocol;
@@ -13,6 +14,34 @@ namespace TopDownRoguelike.Tests.EditMode
 {
     public sealed class NetworkClientTests
     {
+        [Test]
+        public void JoinRoom_DoesNotExposeLegacyRoomIdState()
+        {
+            Type clientType =
+                typeof(NetworkClient);
+
+            Assert.That(
+                clientType.GetMethod(
+                    "JoinRoom",
+                    new[]
+                    {
+                typeof(string),
+                typeof(string)
+                    }),
+                Is.Null,
+                "NetworkClient must not expose the legacy " +
+                "JoinRoom(nickname, roomId) overload.");
+
+            Assert.That(
+                clientType.GetField(
+                    "pendingRoomId",
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic),
+                Is.Null,
+                "NetworkClient must not retain " +
+                "pendingRoomId state.");
+        }
+
         [Test]
         public void TcpAndUdpHandshake_ReachesConnected()
         {
@@ -367,9 +396,25 @@ namespace TopDownRoguelike.Tests.EditMode
                     client.LastError,
                     Is.Empty);
 
-                client.JoinRoom(
-                    " Guest ",
-                    " ROOM-1 ");
+                MethodInfo joinRoomMethod =
+                    typeof(NetworkClient).GetMethod(
+                        "JoinRoom",
+                        new[]
+                        {
+                            typeof(string)
+                        });
+
+                Assert.That(
+                    joinRoomMethod,
+                    Is.Not.Null,
+                    "NetworkClient must define JoinRoom(string).");
+
+                joinRoomMethod.Invoke(
+                    client,
+                    new object[]
+                    {
+                        " Guest "
+                    });
 
                 Assert.That(
                     client.State,
@@ -397,9 +442,9 @@ namespace TopDownRoguelike.Tests.EditMode
                         MessageType.JoinRoomRequest));
 
                 Assert.That(
-                    Encoding.UTF8.GetString(
-                        roomRequests[1].Payload),
-                    Is.EqualTo("ROOM-1"));
+                    roomRequests[1].Payload,
+                    Is.Empty,
+                    "JoinRoomRequest payload must be empty.");
 
                 byte[] joinRoomResponse =
                     PacketCodec.Encode(

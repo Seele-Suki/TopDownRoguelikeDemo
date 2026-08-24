@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.IO;
 using NUnit.Framework;
+using TopDownRoguelike.Infrastructure;
 using TopDownRoguelike.Networking.Client;
+using TopDownRoguelike.Networking.Protocol;
 using UnityEngine;
 
 namespace TopDownRoguelike.Tests.EditMode
@@ -307,6 +311,118 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void RoomStateChanged_AppliesSnapshotToLobby()
+        {
+            Type menuType =
+                FindType(
+                    "TopDownRoguelike.Menu.UI." +
+                    "MultiplayerMenuView");
+
+            Type lobbyType =
+                FindType("RoomLobbyView");
+
+            Assert.That(menuType, Is.Not.Null);
+            Assert.That(lobbyType, Is.Not.Null);
+
+            var menuObject =
+                new GameObject("MultiplayerMenuViewTests");
+
+            var lobbyObject =
+                new GameObject("RoomLobbyViewTests");
+
+            var client =
+                new RecordingRoomNetworkClient();
+
+            try
+            {
+                Component menu =
+                    menuObject.AddComponent(menuType);
+
+                Component lobby =
+                    lobbyObject.AddComponent(lobbyType);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "networkClient",
+                    client);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "roomLobbyView",
+                    lobby);
+
+                MethodInfo stateHandler =
+                    menuType.GetMethod(
+                        "HandleNetworkClientStateChanged",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    stateHandler,
+                    Is.Not.Null);
+
+                stateHandler.Invoke(
+                    menu,
+                    new object[]
+                    {
+                        NetworkClientState.InRoom
+                    });
+
+                var players =
+                    new List<RoomPlayerSnapshot>
+                    {
+                        new RoomPlayerSnapshot(
+                            42u,
+                            true,
+                            false,
+                            CharacterId.Ranged,
+                            "RealHost"),
+                        new RoomPlayerSnapshot(
+                            77u,
+                            false,
+                            false,
+                            CharacterId.Ranged,
+                            "RealClient")
+                    };
+
+                var snapshot =
+                    new RoomStateSnapshot(
+                        "ROOM-9",
+                        RoomStateStatus.Waiting,
+                        DifficultyId.Normal,
+                        players);
+
+                client.EmitRoomState(
+                    77u,
+                    snapshot);
+
+                FieldInfo localPlayerIdField =
+                    lobbyType.GetField(
+                        "localPlayerId",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    localPlayerIdField,
+                    Is.Not.Null);
+
+                Assert.That(
+                    localPlayerIdField.GetValue(lobby),
+                    Is.EqualTo(77));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    lobbyObject);
+
+                UnityEngine.Object.DestroyImmediate(
+                    menuObject);
+            }
+        }
+
+        [Test]
         public void HandleJoinRoom_StartsRealJoinConnection()
         {
             Type menuType =
@@ -332,9 +448,6 @@ namespace TopDownRoguelike.Tests.EditMode
             var portObject =
                 new GameObject("PortInput");
 
-            var roomIdObject =
-                new GameObject("RoomIdInput");
-
             var client =
                 new RecordingRoomNetworkClient();
 
@@ -355,9 +468,6 @@ namespace TopDownRoguelike.Tests.EditMode
                     Component portInput =
                         portObject.AddComponent(inputType);
 
-                    Component roomIdInput =
-                        roomIdObject.AddComponent(inputType);
-
                     inputType.GetProperty("text").SetValue(
                         nicknameInput,
                         " Bronya ");
@@ -369,10 +479,6 @@ namespace TopDownRoguelike.Tests.EditMode
                     inputType.GetProperty("text").SetValue(
                         portInput,
                         " 7777 ");
-
-                    inputType.GetProperty("text").SetValue(
-                        roomIdInput,
-                        " ROOM-1 ");
 
                     SetField(
                         menuType,
@@ -391,12 +497,6 @@ namespace TopDownRoguelike.Tests.EditMode
                         menu,
                         "portInput",
                         portInput);
-
-                    SetField(
-                        menuType,
-                        menu,
-                        "roomIdInput",
-                        roomIdInput);
 
                     SetField(
                         menuType,
@@ -441,16 +541,9 @@ namespace TopDownRoguelike.Tests.EditMode
                     Assert.That(
                         client.LastNickname,
                         Is.EqualTo("Bronya"));
-
-                    Assert.That(
-                        client.LastRoomId,
-                        Is.EqualTo("ROOM-1"));
                 }
                 finally
                 {
-                    UnityEngine.Object.DestroyImmediate(
-                        roomIdObject);
-
                     UnityEngine.Object.DestroyImmediate(
                         portObject);
 
@@ -459,6 +552,125 @@ namespace TopDownRoguelike.Tests.EditMode
 
                     UnityEngine.Object.DestroyImmediate(
                         nicknameObject);
+
+                    UnityEngine.Object.DestroyImmediate(
+                        menuObject);
+                }
+            }
+        }
+
+        [Test]
+        public void HandleCreateRoom_AutomaticStartupFailure_DoesNotConnect()
+        {
+            Type menuType =
+                FindType(
+                    "TopDownRoguelike.Menu.UI." +
+                    "MultiplayerMenuView");
+
+            Type inputType =
+                FindType("TMPro.TMP_InputField");
+
+            var menuObject =
+                new GameObject("MultiplayerMenuViewTests");
+
+            var inputObject =
+                new GameObject("NicknameInput");
+
+            var launcherObject =
+                new GameObject("ServerProcessLauncherTests");
+
+            var client =
+                new RecordingRoomNetworkClient();
+
+            using (var flow =
+                new RoomConnectionFlow(client))
+            {
+                try
+                {
+                    Component menu =
+                        menuObject.AddComponent(menuType);
+
+                    Component nicknameInput =
+                        inputObject.AddComponent(inputType);
+
+                    var launcher =
+                        launcherObject.AddComponent<
+                            ServerProcessLauncher>();
+
+                    inputType.GetProperty("text").SetValue(
+                        nicknameInput,
+                        "Seele");
+
+                    SetField(
+                        launcher.GetType(),
+                        launcher,
+                        "startupMode",
+                        ServerStartupMode.Automatic);
+
+                    SetField(
+                        launcher.GetType(),
+                        launcher,
+                        "executableFileName",
+                        Path.Combine(
+                            Path.GetTempPath(),
+                            Guid.NewGuid().ToString("N") +
+                            ".exe"));
+
+                    SetField(
+                        menuType,
+                        menu,
+                        "nicknameInput",
+                        nicknameInput);
+
+                    SetField(
+                        menuType,
+                        menu,
+                        "hostAddress",
+                        "::1");
+
+                    SetField(
+                        menuType,
+                        menu,
+                        "hostPort",
+                        7777);
+
+                    SetField(
+                        menuType,
+                        menu,
+                        "serverProcessLauncher",
+                        launcher);
+
+                    SetField(
+                        menuType,
+                        menu,
+                        "connectionFlow",
+                        flow);
+
+                    MethodInfo handleCreateMethod =
+                        menuType.GetMethod(
+                            "HandleCreateRoom");
+
+                    Assert.That(
+                        handleCreateMethod,
+                        Is.Not.Null);
+
+                    handleCreateMethod.Invoke(
+                        menu,
+                        null);
+
+                    Assert.That(
+                        client.ConnectCallCount,
+                        Is.Zero,
+                        "Client must not connect when automatic " +
+                        "server startup fails.");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        launcherObject);
+
+                    UnityEngine.Object.DestroyImmediate(
+                        inputObject);
 
                     UnityEngine.Object.DestroyImmediate(
                         menuObject);
@@ -603,10 +815,47 @@ namespace TopDownRoguelike.Tests.EditMode
                 "hostPort",
                 typeof(int).FullName);
 
-            AssertFieldType(
-                menuType,
-                "roomIdInput",
-                "TMPro.TMP_InputField");
+            Assert.That(
+                menuType.GetField(
+                    "roomIdInput",
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic),
+                Is.Null,
+                "MultiplayerMenuView must not require " +
+                "a Room ID input.");
+        }
+
+        [Test]
+        public void MainMenuScene_DoesNotContainRoomIdControls()
+        {
+            string scenePath =
+                Path.Combine(
+                    Application.dataPath,
+                    "Scenes",
+                    "MainMenu.unity");
+
+            string sceneYaml =
+                File.ReadAllText(
+                    scenePath);
+
+            Assert.That(
+                sceneYaml,
+                Does.Not.Contain(
+                    "m_Name: RoomIdLabel"),
+                "MainMenu must not contain RoomIdLabel.");
+
+            Assert.That(
+                sceneYaml,
+                Does.Not.Contain(
+                    "m_Name: RoomIdInput"),
+                "MainMenu must not contain RoomIdInput.");
+
+            Assert.That(
+                sceneYaml,
+                Does.Not.Contain(
+                    "roomIdInput:"),
+                "MainMenu must not contain a stale " +
+                "roomIdInput reference.");
         }
 
         private static Type FindType(
@@ -670,6 +919,27 @@ namespace TopDownRoguelike.Tests.EditMode
             public event Action<NetworkClientState>
                 StateChanged;
 
+            public event Action<RoomStateSnapshot>
+                RoomStateChanged;
+
+            public uint PlayerId
+            {
+                get;
+                private set;
+            }
+
+            public string CurrentRoomId
+            {
+                get;
+                private set;
+            } = string.Empty;
+
+            public RoomStateSnapshot CurrentRoomState
+            {
+                get;
+                private set;
+            }
+
             public NetworkClientState State
             {
                 get;
@@ -712,12 +982,6 @@ namespace TopDownRoguelike.Tests.EditMode
                 private set;
             } = string.Empty;
 
-            public string LastRoomId
-            {
-                get;
-                private set;
-            } = string.Empty;
-
             public string LastAddress
             {
                 get;
@@ -750,12 +1014,10 @@ namespace TopDownRoguelike.Tests.EditMode
             }
 
             public void JoinRoom(
-                string nickname,
-                string roomId)
+                string nickname)
             {
                 JoinRoomCallCount++;
                 LastNickname = nickname;
-                LastRoomId = roomId;
             }
 
             public void Disconnect()
@@ -767,6 +1029,23 @@ namespace TopDownRoguelike.Tests.EditMode
 
                 StateChanged?.Invoke(
                     State);
+            }
+
+            public void EmitRoomState(
+                uint playerId,
+                RoomStateSnapshot snapshot)
+            {
+                PlayerId =
+                    playerId;
+
+                CurrentRoomId =
+                    snapshot.RoomId;
+
+                CurrentRoomState =
+                    snapshot;
+
+                RoomStateChanged?.Invoke(
+                    snapshot);
             }
 
             public void SetState(

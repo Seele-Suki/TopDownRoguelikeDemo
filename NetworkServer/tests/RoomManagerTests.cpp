@@ -312,6 +312,44 @@ int main()
             return 1;
         }
 
+        tdr::room::RoomManager fullRoomManager;
+
+        const auto fullRoom =
+            fullRoomManager.CreateRoom(
+                100,
+                "FullHost"
+            );
+
+        fullRoomManager.AddPlayer(
+            fullRoom.Id(),
+            101,
+            "FullGuest"
+        );
+
+        bool rejectedFullWaitingRoom = false;
+
+        try
+        {
+            auto& unexpectedRoom =
+                fullRoomManager.FindSingleWaitingRoom();
+
+            (void)unexpectedRoom;
+        }
+        catch (const std::runtime_error&)
+        {
+            rejectedFullWaitingRoom = true;
+        }
+
+        if (!rejectedFullWaitingRoom)
+        {
+            std::cerr
+                << "[FAIL] A full waiting room was "
+                << "returned as joinable."
+                << std::endl;
+
+            return 1;
+        }
+
         tdr::room::RoomManager leaveRoomManager;
 
         const auto leaveRoom =

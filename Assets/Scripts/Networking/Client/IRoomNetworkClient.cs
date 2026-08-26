@@ -1,5 +1,6 @@
 using System;
 using TopDownRoguelike.Networking.Protocol;
+using TopDownRoguelike.Infrastructure;
 
 namespace TopDownRoguelike.Networking.Client
 {
@@ -10,6 +11,11 @@ namespace TopDownRoguelike.Networking.Client
 
         event Action<RoomStateSnapshot>
             RoomStateChanged;
+
+        event Action<string>
+            ErrorReceived;
+
+        event Action GameStarted;
 
         NetworkClientState State
         {
@@ -45,6 +51,17 @@ namespace TopDownRoguelike.Networking.Client
 
         void JoinRoom(
             string nickname);
+
+        void SetPlayerSelection(
+            CharacterId character,
+            DifficultyId difficulty);
+
+        void SetReady(
+            bool ready);
+
+        void StartGame();
+
+        void LeaveRoom();
 
         void Disconnect();
     }

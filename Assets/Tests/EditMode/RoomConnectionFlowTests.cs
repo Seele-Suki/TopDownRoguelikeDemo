@@ -3,6 +3,7 @@ using System.Reflection;
 using NUnit.Framework;
 using TopDownRoguelike.Networking.Client;
 using TopDownRoguelike.Networking.Protocol;
+using TopDownRoguelike.Infrastructure;
 
 namespace TopDownRoguelike.Tests.EditMode
 {
@@ -247,6 +248,16 @@ namespace TopDownRoguelike.Tests.EditMode
                 "IRoomNetworkClient must expose RoomStateChanged.");
 
             Assert.That(
+                contractType.GetEvent("ErrorReceived"),
+                Is.Not.Null,
+                "IRoomNetworkClient must expose ErrorReceived.");
+
+            Assert.That(
+                contractType.GetEvent("GameStarted"),
+                Is.Not.Null,
+                "IRoomNetworkClient must expose GameStarted.");
+
+            Assert.That(
                 contractType.GetProperty("PlayerId"),
                 Is.Not.Null,
                 "IRoomNetworkClient must expose PlayerId.");
@@ -304,9 +315,29 @@ namespace TopDownRoguelike.Tests.EditMode
                 Is.Null,
                 "IRoomNetworkClient must not require a room ID.");
 
+            MethodInfo setPlayerSelectionMethod =
+                contractType.GetMethod(
+                    "SetPlayerSelection",
+                    new[]
+                    {
+                        typeof(CharacterId),
+                        typeof(DifficultyId)
+                    });
+
+            Assert.That(
+                setPlayerSelectionMethod,
+                Is.Not.Null,
+                "IRoomNetworkClient must expose " +
+                "SetPlayerSelection(CharacterId, DifficultyId).");
+
             Assert.That(
                 contractType.GetMethod("Disconnect"),
                 Is.Not.Null);
+
+            Assert.That(
+                contractType.GetMethod("LeaveRoom"),
+                Is.Not.Null,
+                "IRoomNetworkClient must expose LeaveRoom().");
         }
 
         private sealed class FakeRoomNetworkClient
@@ -317,6 +348,28 @@ namespace TopDownRoguelike.Tests.EditMode
 
             public event Action<RoomStateSnapshot>
                 RoomStateChanged
+            {
+                add
+                {
+                }
+                remove
+                {
+                }
+            }
+
+            public event Action<string>
+                ErrorReceived
+            {
+                add
+                {
+                }
+                remove
+                {
+                }
+            }
+
+            public event Action
+                GameStarted
             {
                 add
                 {
@@ -407,6 +460,25 @@ namespace TopDownRoguelike.Tests.EditMode
             {
                 JoinRoomCallCount++;
                 LastNickname = nickname;
+            }
+
+            public void SetPlayerSelection(
+                CharacterId character,
+                DifficultyId difficulty)
+            {
+            }
+
+            public void SetReady(
+                bool ready)
+            {
+            }
+
+            public void StartGame()
+            {
+            }
+
+            public void LeaveRoom()
+            {
             }
 
             public void Disconnect()

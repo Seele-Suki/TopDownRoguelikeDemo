@@ -514,6 +514,7 @@ namespace tdr::net
             );
 
         std::string closedRoomId;
+        std::string remainingRoomId;
 
         if (session.HasRoom())
         {
@@ -524,6 +525,11 @@ namespace tdr::net
                 == playerId)
             {
                 closedRoomId =
+                    room.Id();
+            }
+            else
+            {
+                remainingRoomId =
                     room.Id();
             }
         }
@@ -544,6 +550,13 @@ namespace tdr::net
         RemoveSession(
             playerId
         );
+
+        if (!remainingRoomId.empty())
+        {
+            BroadcastRoomState(
+                remainingRoomId
+            );
+        }
     }
 
     std::size_t

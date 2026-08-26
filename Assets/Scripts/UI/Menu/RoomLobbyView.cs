@@ -6,6 +6,7 @@ using TopDownRoguelike.Infrastructure;
 using TopDownRoguelike.Menu.UI;
 using TopDownRoguelike.Networking.Room;
 using TopDownRoguelike.Networking.Protocol;
+using TopDownRoguelike.Networking.Client;
 
 public class RoomLobbyView : MonoBehaviour
 {
@@ -31,6 +32,8 @@ public class RoomLobbyView : MonoBehaviour
 
     private RoomState roomState;
 
+    private IRoomNetworkClient networkClient;
+
     private int displayedHostPlayerId;
     private int displayedClientPlayerId;
 
@@ -38,6 +41,7 @@ public class RoomLobbyView : MonoBehaviour
     private RoomRole localRole = RoomRole.None;
     private string connectedAddress = string.Empty;
     private int connectedPort;
+    private bool hasGameStarted;
 
     private void Awake()
     {
@@ -51,6 +55,12 @@ public class RoomLobbyView : MonoBehaviour
         {
             clientPlayerSlot.AddRangedCharacterListener(
                 SelectLocalRangedCharacter);
+        }
+
+        if (normalDifficultyCard != null)
+        {
+            normalDifficultyCard.AddClickListener(
+                SelectLocalNormalDifficulty);
         }
 
         if (startGameButton != null)
@@ -69,6 +79,28 @@ public class RoomLobbyView : MonoBehaviour
         }
     }
 
+    public void BindNetworkClient(
+        IRoomNetworkClient client)
+    {
+        networkClient =
+            client
+            ?? throw new ArgumentNullException(
+                nameof(client));
+    }
+
+    public void SetConnectionEndpoint(
+        string address,
+        int port)
+    {
+        connectedAddress =
+            address ?? string.Empty;
+
+        connectedPort =
+            port;
+
+        RefreshView();
+    }
+
     public void ApplyNetworkRoomState(
         RoomStateSnapshot snapshot,
         uint networkLocalPlayerId)
@@ -78,6 +110,10 @@ public class RoomLobbyView : MonoBehaviour
             throw new ArgumentNullException(
                 nameof(snapshot));
         }
+
+        hasGameStarted =
+            snapshot.Status ==
+            RoomStateStatus.Started;
 
         roomState =
             new RoomState();
@@ -155,7 +191,8 @@ public class RoomLobbyView : MonoBehaviour
         if (readyButton != null)
         {
             readyButton.interactable =
-                localPlayer != null;
+                localPlayer != null &&
+                !hasGameStarted;
         }
 
         RefreshView();
@@ -166,22 +203,90 @@ public class RoomLobbyView : MonoBehaviour
         if (roomState == null ||
             localRole == RoomRole.None)
         {
-            ShowMessage("请先创建或加入房间");
+            ShowMessage("请等待创建或加入房间");
             return;
         }
 
-        bool selected = roomState.TrySelectCharacter(
-            localPlayerId,
-            CharacterId.Ranged);
-
-        if (!selected)
+        if (networkClient == null)
         {
-            ShowMessage("角色选择失败");
+            ShowMessage("网络客户端尚未绑定");
             return;
         }
 
-        RefreshView();
-        ShowMessage("已选择远程角色");
+        DifficultyId difficulty =
+            localRole == RoomRole.Host
+                ? roomState.SelectedDifficulty
+                : DifficultyId.None;
+
+        try
+        {
+            networkClient.SetPlayerSelection(
+                CharacterId.Ranged,
+                difficulty);
+        }
+        catch (Exception exception)
+        {
+            ShowMessage(
+                "角色选择发送失败：" +
+                exception.Message);
+
+            return;
+        }
+
+        ShowMessage(
+            "已发送角色选择，等待服务器确认");
+    }
+
+    private void SelectLocalNormalDifficulty()
+    {
+        if (roomState == null ||
+            localRole == RoomRole.None)
+        {
+            ShowMessage("请等待创建或加入房间");
+            return;
+        }
+
+        if (localRole != RoomRole.Host)
+        {
+            ShowMessage("只有房主可以选择难度");
+            return;
+        }
+
+        if (networkClient == null)
+        {
+            ShowMessage("网络客户端尚未绑定");
+            return;
+        }
+
+        RoomPlayerState localPlayer =
+            roomState.GetPlayer(
+                localPlayerId);
+
+        if (localPlayer == null ||
+            localPlayer.SelectedCharacter ==
+                CharacterId.None)
+        {
+            ShowMessage("请先选择角色");
+            return;
+        }
+
+        try
+        {
+            networkClient.SetPlayerSelection(
+                localPlayer.SelectedCharacter,
+                DifficultyId.Normal);
+        }
+        catch (Exception exception)
+        {
+            ShowMessage(
+                "难度选择发送失败：" +
+                exception.Message);
+
+            return;
+        }
+
+        ShowMessage(
+            "已发送难度选择，等待服务器确认");
     }
 
     public void ToggleLocalPlayerReady()
@@ -189,49 +294,55 @@ public class RoomLobbyView : MonoBehaviour
         if (roomState == null ||
             localRole == RoomRole.None)
         {
-            ShowMessage("请先创建或加入房间");
+            ShowMessage("请等待创建或加入房间");
+            return;
+        }
+
+        if (networkClient == null)
+        {
+            ShowMessage("网络客户端尚未绑定");
             return;
         }
 
         RoomPlayerState localPlayer =
-            roomState.GetPlayer(localPlayerId);
+            roomState.GetPlayer(
+                localPlayerId);
 
         if (localPlayer == null)
         {
-            ShowMessage("没有找到本机玩家数据");
+            ShowMessage("没有找到本地玩家");
             return;
         }
 
-        bool nextReadyState = !localPlayer.IsReady;
+        bool nextReadyState =
+            !localPlayer.IsReady;
 
         if (nextReadyState &&
             localPlayer.SelectedCharacter ==
-            CharacterId.None)
+                CharacterId.None)
         {
             ShowMessage("请先选择角色");
             return;
         }
 
-        bool changed = roomState.TrySetReady(
-            localPlayerId,
-            nextReadyState);
-
-        if (!changed)
+        try
         {
-            ShowMessage("切换准备状态失败");
+            networkClient.SetReady(
+                nextReadyState);
+        }
+        catch (Exception exception)
+        {
+            ShowMessage(
+                "准备状态发送失败：" +
+                exception.Message);
+
             return;
         }
 
-        RefreshView();
-
-        if (nextReadyState)
-        {
-            ShowMessage("本机玩家已准备");
-        }
-        else
-        {
-            ShowMessage("本机玩家已取消准备");
-        }
+        ShowMessage(
+            nextReadyState
+                ? "已发送准备请求，等待服务器确认"
+                : "已发送取消准备请求，等待服务器确认");
     }
 
     private void RefreshView()
@@ -251,18 +362,29 @@ public class RoomLobbyView : MonoBehaviour
 
         if (addressText != null)
         {
-            if (localRole == RoomRole.Host)
+            if (addressText != null)
             {
-                addressText.text = "等待生成服务器地址";
-            }
-            else
-            {
-                bool isIpv6 =
-                    connectedAddress.Contains(":");
+                bool hasEndpoint =
+                    !string.IsNullOrWhiteSpace(
+                        connectedAddress) &&
+                    connectedPort > 0;
 
-                addressText.text = isIpv6
-                    ? $"[{connectedAddress}]:{connectedPort}"
-                    : $"{connectedAddress}:{connectedPort}";
+                if (!hasEndpoint)
+                {
+                    addressText.text =
+                        localRole == RoomRole.Host
+                            ? "等待生成服务器地址"
+                            : "等待连接地址";
+                }
+                else
+                {
+                    bool isIpv6 =
+                        connectedAddress.Contains(":");
+
+                    addressText.text = isIpv6
+                        ? $"[{connectedAddress}]:{connectedPort}"
+                        : $"{connectedAddress}:{connectedPort}";
+                }
             }
         }
 
@@ -286,13 +408,22 @@ public class RoomLobbyView : MonoBehaviour
                     : "准备";
         }
 
+        if (readyButton != null)
+        {
+            readyButton.interactable =
+                localPlayer != null &&
+                !hasGameStarted;
+        }
+
         bool canEditHost =
+            !hasGameStarted &&
             localPlayerId ==
                 displayedHostPlayerId &&
             hostPlayer != null &&
             !hostPlayer.IsReady;
 
         bool canEditClient =
+            !hasGameStarted &&
             localPlayerId ==
                 displayedClientPlayerId &&
             clientPlayer != null &&
@@ -318,7 +449,9 @@ public class RoomLobbyView : MonoBehaviour
         if (normalDifficultyCard != null)
         {
             normalDifficultyCard.SetAvailable(true);
-            normalDifficultyCard.SetInteractable(localIsHost);
+            normalDifficultyCard.SetInteractable(
+                localIsHost &&
+                !hasGameStarted);
             normalDifficultyCard.SetSelected(
                 roomState.SelectedDifficulty ==
                 DifficultyId.Normal);
@@ -339,9 +472,20 @@ public class RoomLobbyView : MonoBehaviour
         if (startGameButton != null)
         {
             startGameButton.interactable =
+                !hasGameStarted &&
                 localIsHost &&
                 roomState.CanStartGame;
         }
+    }
+
+    public void HandleGameStarted()
+    {
+        hasGameStarted = true;
+
+        RefreshView();
+
+        ShowMessage(
+            "服务器已确认开始游戏");
     }
 
     public void HandleStartGamePrototype()
@@ -360,11 +504,32 @@ public class RoomLobbyView : MonoBehaviour
 
         if (!roomState.CanStartGame)
         {
-            ShowMessage("双方选择角色并准备后才能开始");
+            ShowMessage(
+                "双方选择角色并准备后才能开始");
             return;
         }
 
-        ShowMessage("联机游戏启动将在后续阶段接入");
+        if (networkClient == null)
+        {
+            ShowMessage("网络客户端尚未绑定");
+            return;
+        }
+
+        try
+        {
+            networkClient.StartGame();
+        }
+        catch (Exception exception)
+        {
+            ShowMessage(
+                "开始请求发送失败：" +
+                exception.Message);
+
+            return;
+        }
+
+        ShowMessage(
+            "已发送开始请求，等待服务器确认");
     }
 
     public void ResetLocalRoom()
@@ -385,6 +550,7 @@ public class RoomLobbyView : MonoBehaviour
         localRole = RoomRole.None;
         connectedAddress = string.Empty;
         connectedPort = 0;
+        hasGameStarted = false;
 
         if (hostPlayerSlot != null)
         {

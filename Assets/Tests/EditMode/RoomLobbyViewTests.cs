@@ -1,7 +1,8 @@
+using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using NUnit.Framework;
+using TMPro;
 using TopDownRoguelike.Infrastructure;
 using TopDownRoguelike.Networking.Protocol;
 using UnityEngine;
@@ -221,6 +222,106 @@ namespace TopDownRoguelike.Tests.EditMode
 
             return (string)textProperty.GetValue(
                 textComponent);
+        }
+
+        [Test]
+        public void SetConnectionEndpoint_DisplaysIpv6Endpoint()
+        {
+            Type lobbyType =
+                FindType("RoomLobbyView");
+
+            Type textType =
+                FindType("TMPro.TextMeshProUGUI");
+
+            Assert.That(lobbyType, Is.Not.Null);
+            Assert.That(textType, Is.Not.Null);
+
+            var lobbyObject =
+                new GameObject("RoomLobbyEndpointTests");
+
+            var addressObject =
+                new GameObject("AddressText");
+
+            addressObject.transform.SetParent(
+                lobbyObject.transform);
+
+            try
+            {
+                Component lobby =
+                    lobbyObject.AddComponent(lobbyType);
+
+                Component addressText =
+                    addressObject.AddComponent(textType);
+
+                SetPrivateField(
+                    lobby,
+                    "addressText",
+                    addressText);
+
+                MethodInfo applyMethod =
+                    lobbyType.GetMethod(
+                        "ApplyNetworkRoomState",
+                        BindingFlags.Instance |
+                        BindingFlags.Public);
+
+                MethodInfo endpointMethod =
+                    lobbyType.GetMethod(
+                        "SetConnectionEndpoint",
+                        BindingFlags.Instance |
+                        BindingFlags.Public);
+
+                Assert.That(
+                    applyMethod,
+                    Is.Not.Null);
+
+                Assert.That(
+                    endpointMethod,
+                    Is.Not.Null,
+                    "RoomLobbyView must expose SetConnectionEndpoint().");
+
+                var snapshot =
+                    new RoomStateSnapshot(
+                        "ROOM-ENDPOINT",
+                        RoomStateStatus.Waiting,
+                        DifficultyId.Normal,
+                        new[]
+                        {
+                    new RoomPlayerSnapshot(
+                        7u,
+                        true,
+                        false,
+                        CharacterId.Ranged,
+                        "Host")
+                        });
+
+                applyMethod.Invoke(
+                    lobby,
+                    new object[]
+                    {
+                snapshot,
+                7u
+                    });
+
+                endpointMethod.Invoke(
+                    lobby,
+                    new object[]
+                    {
+                "::1",
+                7777
+                    });
+
+                TMP_Text typedAddressText =
+                    (TMP_Text)addressText;
+
+                Assert.That(
+                    typedAddressText.text,
+                    Is.EqualTo("[::1]:7777"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    lobbyObject);
+            }
         }
 
         private static Type FindType(

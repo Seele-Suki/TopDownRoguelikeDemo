@@ -8,6 +8,8 @@ using TopDownRoguelike.Infrastructure;
 using TopDownRoguelike.Networking.Client;
 using TopDownRoguelike.Networking.Protocol;
 using UnityEngine;
+using TMPro;
+using UnityEngine.UI;
 
 namespace TopDownRoguelike.Tests.EditMode
 {
@@ -411,6 +413,656 @@ namespace TopDownRoguelike.Tests.EditMode
                 Assert.That(
                     localPlayerIdField.GetValue(lobby),
                     Is.EqualTo(77));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    lobbyObject);
+
+                UnityEngine.Object.DestroyImmediate(
+                    menuObject);
+            }
+        }
+
+        [Test]
+        public void InRoom_ForwardsConnectionEndpointToLobby()
+        {
+            Type menuType =
+                FindType(
+                    "TopDownRoguelike.Menu.UI." +
+                    "MultiplayerMenuView");
+
+            Type lobbyType =
+                FindType("RoomLobbyView");
+
+            Assert.That(menuType, Is.Not.Null);
+            Assert.That(lobbyType, Is.Not.Null);
+
+            var menuObject =
+                new GameObject("EndpointMenuTests");
+
+            var lobbyObject =
+                new GameObject("EndpointLobbyTests");
+
+            var addressObject =
+                new GameObject("EndpointAddressText");
+
+            addressObject.transform.SetParent(
+                lobbyObject.transform);
+
+            var client =
+                new RecordingRoomNetworkClient();
+
+            try
+            {
+                Component menu =
+                    menuObject.AddComponent(menuType);
+
+                Component lobby =
+                    lobbyObject.AddComponent(lobbyType);
+
+                TMP_Text addressText =
+                    addressObject.AddComponent<TextMeshProUGUI>();
+
+                SetField(
+                    menuType,
+                    menu,
+                    "networkClient",
+                    client);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "roomLobbyView",
+                    lobby);
+
+                SetField(
+                    lobbyType,
+                    lobby,
+                    "addressText",
+                    addressText);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "activeConnectionAddress",
+                    "::1");
+
+                SetField(
+                    menuType,
+                    menu,
+                    "activeConnectionPort",
+                    7777);
+
+                MethodInfo stateHandler =
+                    menuType.GetMethod(
+                        "HandleNetworkClientStateChanged",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    stateHandler,
+                    Is.Not.Null);
+
+                stateHandler.Invoke(
+                    menu,
+                    new object[]
+                    {
+                NetworkClientState.InRoom
+                    });
+
+                var snapshot =
+                    new RoomStateSnapshot(
+                        "ROOM-ENDPOINT",
+                        RoomStateStatus.Waiting,
+                        DifficultyId.Normal,
+                        new[]
+                        {
+                    new RoomPlayerSnapshot(
+                        7u,
+                        true,
+                        false,
+                        CharacterId.Ranged,
+                        "Host")
+                        });
+
+                client.EmitRoomState(
+                    7u,
+                    snapshot);
+
+                Assert.That(
+                    addressText.text,
+                    Is.EqualTo("[::1]:7777"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    lobbyObject);
+
+                UnityEngine.Object.DestroyImmediate(
+                    menuObject);
+            }
+        }
+
+        [Test]
+        public void ErrorReceived_ShowsServerRoomError()
+        {
+            Type menuType =
+                FindType(
+                    "TopDownRoguelike.Menu.UI." +
+                    "MultiplayerMenuView");
+
+            Type textType =
+                FindType("TMPro.TextMeshProUGUI");
+
+            Assert.That(menuType, Is.Not.Null);
+            Assert.That(textType, Is.Not.Null);
+
+            var menuObject =
+                new GameObject("RoomErrorMenuTests");
+
+            var validationObject =
+                new GameObject("RoomErrorValidationText");
+
+            var client =
+                new RecordingRoomNetworkClient();
+
+            try
+            {
+                Component menu =
+                    menuObject.AddComponent(menuType);
+
+                TMP_Text validationText =
+                    validationObject.AddComponent<TextMeshProUGUI>();
+
+                SetField(
+                    menuType,
+                    menu,
+                    "networkClient",
+                    client);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "validationText",
+                    validationText);
+
+                MethodInfo stateHandler =
+                    menuType.GetMethod(
+                        "HandleNetworkClientStateChanged",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    stateHandler,
+                    Is.Not.Null);
+
+                stateHandler.Invoke(
+                    menu,
+                    new object[]
+                    {
+                NetworkClientState.InRoom
+                    });
+
+                client.EmitError(
+                    "Room is full.");
+
+                Assert.That(
+                    validationText.text,
+                    Is.EqualTo("Room is full."));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    validationObject);
+
+                UnityEngine.Object.DestroyImmediate(
+                    menuObject);
+            }
+        }
+
+        [Test]
+        public void HandleLeaveRoom_SendsLeaveAndDisconnectsClient()
+        {
+            Type menuType =
+                FindType(
+                    "TopDownRoguelike.Menu.UI." +
+                    "MultiplayerMenuView");
+
+            Assert.That(menuType, Is.Not.Null);
+
+            var menuObject =
+                new GameObject("LeaveRoomMenuTests");
+
+            var lobbyPanel =
+                new GameObject("RoomLobbyPanel");
+
+            var entryPanel =
+                new GameObject("MultiplayerEntryPanel");
+
+            var client =
+                new RecordingRoomNetworkClient();
+
+            client.SetState(
+                NetworkClientState.InRoom);
+
+            try
+            {
+                Component menu =
+                    menuObject.AddComponent(menuType);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "networkClient",
+                    client);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "roomLobbyPanel",
+                    lobbyPanel);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "multiplayerEntryPanel",
+                    entryPanel);
+
+                lobbyPanel.SetActive(true);
+                entryPanel.SetActive(false);
+
+                MethodInfo leaveMethod =
+                    menuType.GetMethod(
+                        "HandleLeaveRoom",
+                        BindingFlags.Instance |
+                        BindingFlags.Public);
+
+                Assert.That(
+                    leaveMethod,
+                    Is.Not.Null);
+
+                leaveMethod.Invoke(
+                    menu,
+                    null);
+
+                Assert.That(
+                    client.LeaveRoomCallCount,
+                    Is.EqualTo(1),
+                    "Leaving a room must send LeaveRoom.");
+
+                Assert.That(
+                    client.DisconnectCallCount,
+                    Is.EqualTo(1),
+                    "Leaving a room must disconnect the client.");
+
+                Assert.That(
+                    client.State,
+                    Is.EqualTo(
+                        NetworkClientState.Disconnected),
+                    "Leaving a room must leave the client disconnected.");
+
+                Assert.That(
+                    lobbyPanel.activeSelf,
+                    Is.False);
+
+                Assert.That(
+                    entryPanel.activeSelf,
+                    Is.True);
+
+                FieldInfo addressField =
+                    menuType.GetField(
+                        "activeConnectionAddress",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                FieldInfo portField =
+                    menuType.GetField(
+                        "activeConnectionPort",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    addressField,
+                    Is.Not.Null);
+
+                Assert.That(
+                    portField,
+                    Is.Not.Null);
+
+                Assert.That(
+                    addressField.GetValue(menu),
+                    Is.EqualTo(string.Empty));
+
+                Assert.That(
+                    portField.GetValue(menu),
+                    Is.EqualTo(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    entryPanel);
+
+                UnityEngine.Object.DestroyImmediate(
+                    lobbyPanel);
+
+                UnityEngine.Object.DestroyImmediate(
+                    menuObject);
+            }
+        }
+
+        [Test]
+        public void ConnectedAfterRoomState_ReturnsToMultiplayerEntry()
+        {
+            Type menuType =
+                FindType(
+                    "TopDownRoguelike.Menu.UI." +
+                    "MultiplayerMenuView");
+
+            Assert.That(menuType, Is.Not.Null);
+
+            var menuObject =
+                new GameObject("RemoteLeaveMenuTests");
+
+            var lobbyPanel =
+                new GameObject("RoomLobbyPanel");
+
+            var entryPanel =
+                new GameObject("MultiplayerEntryPanel");
+
+            var client =
+                new RecordingRoomNetworkClient();
+
+            try
+            {
+                Component menu =
+                    menuObject.AddComponent(menuType);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "networkClient",
+                    client);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "roomLobbyPanel",
+                    lobbyPanel);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "multiplayerEntryPanel",
+                    entryPanel);
+
+                lobbyPanel.SetActive(true);
+                entryPanel.SetActive(false);
+
+                MethodInfo stateHandler =
+                    menuType.GetMethod(
+                        "HandleNetworkClientStateChanged",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    stateHandler,
+                    Is.Not.Null);
+
+                stateHandler.Invoke(
+                    menu,
+                    new object[]
+                    {
+                NetworkClientState.InRoom
+                    });
+
+                stateHandler.Invoke(
+                    menu,
+                    new object[]
+                    {
+                        NetworkClientState.Connected
+                    });
+
+                Assert.That(
+                    lobbyPanel.activeSelf,
+                    Is.False,
+                    "Remote room closure must hide the Lobby.");
+
+                Assert.That(
+                    entryPanel.activeSelf,
+                    Is.True,
+                    "Remote room closure must show the multiplayer entry.");
+
+                Assert.That(
+                    client.DisconnectCallCount,
+                    Is.EqualTo(1),
+                    "Remote room closure must disconnect " +
+                    "the old server connection.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    entryPanel);
+
+                UnityEngine.Object.DestroyImmediate(
+                    lobbyPanel);
+
+                UnityEngine.Object.DestroyImmediate(
+                    menuObject);
+            }
+        }
+
+        [Test]
+        public void DestroyMenu_DisconnectsNetworkClient()
+        {
+            Type menuType =
+                FindType(
+                    "TopDownRoguelike.Menu.UI." +
+                    "MultiplayerMenuView");
+
+            Assert.That(menuType, Is.Not.Null);
+
+            var menuObject =
+                new GameObject("DestroyMenuNetworkCleanupTests");
+
+            var client =
+                new RecordingRoomNetworkClient();
+
+            try
+            {
+                Component menu =
+                    menuObject.AddComponent(menuType);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "networkClient",
+                    client);
+
+                MethodInfo onDestroyMethod =
+                    menuType.GetMethod(
+                        "OnDestroy",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    onDestroyMethod,
+                    Is.Not.Null,
+                    "MultiplayerMenuView must define OnDestroy().");
+
+                onDestroyMethod.Invoke(
+                    menu,
+                    null);
+
+                Assert.That(
+                    client.DisconnectCallCount,
+                    Is.EqualTo(1),
+                    "OnDestroy must disconnect " +
+                    "the network client.");
+            }
+            finally
+            {
+                if (menuObject != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(
+                        menuObject);
+                }
+            }
+        }
+
+        [Test]
+        public void GameStarted_DisablesLobbyActionsAndShowsConfirmation()
+        {
+            Type menuType =
+                FindType(
+                    "TopDownRoguelike.Menu.UI." +
+                    "MultiplayerMenuView");
+
+            Type lobbyType =
+                FindType("RoomLobbyView");
+
+            Assert.That(menuType, Is.Not.Null);
+            Assert.That(lobbyType, Is.Not.Null);
+
+            var menuObject =
+                new GameObject("GameStartedMenuTests");
+
+            var lobbyObject =
+                new GameObject("GameStartedLobbyTests");
+
+            var messageObject =
+                new GameObject("RoomMessageText");
+
+            var readyButtonObject =
+                new GameObject("ReadyButton");
+
+            var startButtonObject =
+                new GameObject("StartButton");
+
+            messageObject.transform.SetParent(
+                lobbyObject.transform);
+
+            readyButtonObject.transform.SetParent(
+                lobbyObject.transform);
+
+            startButtonObject.transform.SetParent(
+                lobbyObject.transform);
+
+            var client =
+                new RecordingRoomNetworkClient();
+
+            try
+            {
+                Component menu =
+                    menuObject.AddComponent(menuType);
+
+                Component lobby =
+                    lobbyObject.AddComponent(lobbyType);
+
+                TMP_Text messageText =
+                    messageObject.AddComponent<TextMeshProUGUI>();
+
+                Button readyButton =
+                    readyButtonObject.AddComponent<Button>();
+
+                Button startButton =
+                    startButtonObject.AddComponent<Button>();
+
+                SetField(
+                    menuType,
+                    menu,
+                    "networkClient",
+                    client);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "roomLobbyView",
+                    lobby);
+
+                SetField(
+                    lobbyType,
+                    lobby,
+                    "roomMessageText",
+                    messageText);
+
+                SetField(
+                    lobbyType,
+                    lobby,
+                    "readyButton",
+                    readyButton);
+
+                SetField(
+                    lobbyType,
+                    lobby,
+                    "startGameButton",
+                    startButton);
+
+                MethodInfo stateHandler =
+                    menuType.GetMethod(
+                        "HandleNetworkClientStateChanged",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(stateHandler, Is.Not.Null);
+
+                stateHandler.Invoke(
+                    menu,
+                    new object[]
+                    {
+                NetworkClientState.InRoom
+                    });
+
+                var players =
+                    new List<RoomPlayerSnapshot>
+                    {
+                new RoomPlayerSnapshot(
+                    7u,
+                    true,
+                    true,
+                    CharacterId.Ranged,
+                    "Host"),
+                new RoomPlayerSnapshot(
+                    8u,
+                    false,
+                    true,
+                    CharacterId.Ranged,
+                    "Client")
+                    };
+
+                var snapshot =
+                    new RoomStateSnapshot(
+                        "ROOM-START",
+                        RoomStateStatus.Waiting,
+                        DifficultyId.Normal,
+                        players);
+
+                client.EmitRoomState(
+                    7u,
+                    snapshot);
+
+                Assert.That(
+                    readyButton.interactable,
+                    Is.True);
+
+                Assert.That(
+                    startButton.interactable,
+                    Is.True);
+
+                client.EmitGameStarted();
+
+                Assert.That(
+                    readyButton.interactable,
+                    Is.False);
+
+                Assert.That(
+                    startButton.interactable,
+                    Is.False);
+
+                Assert.That(
+                    messageText.text,
+                    Is.EqualTo(
+                        "服务器已确认开始游戏"));
             }
             finally
             {
@@ -913,14 +1565,374 @@ namespace TopDownRoguelike.Tests.EditMode
                 Is.EqualTo(expectedTypeName));
         }
 
+        [Test]
+        public void RoomLobbySelection_SendsCharacterAndHostDifficulty()
+        {
+            Type lobbyType =
+                FindType("RoomLobbyView");
+
+            var lobbyObject =
+                new GameObject("RoomLobbySelectionTests");
+
+            try
+            {
+                Component lobby =
+                    lobbyObject.AddComponent(lobbyType);
+
+                var client =
+                    new RecordingRoomNetworkClient();
+
+                MethodInfo bindMethod =
+                    lobbyType.GetMethod(
+                        "BindNetworkClient",
+                        BindingFlags.Instance |
+                        BindingFlags.Public);
+
+                Assert.That(
+                    bindMethod,
+                    Is.Not.Null,
+                    "RoomLobbyView must expose BindNetworkClient().");
+
+                bindMethod.Invoke(
+                    lobby,
+                    new object[]
+                    {
+                client
+                    });
+
+                var snapshot =
+                    new RoomStateSnapshot(
+                        "ROOM-1",
+                        RoomStateStatus.Waiting,
+                        DifficultyId.Normal,
+                        new List<RoomPlayerSnapshot>
+                        {
+                    new RoomPlayerSnapshot(
+                        7u,
+                        true,
+                        false,
+                        CharacterId.None,
+                        "Host")
+                        });
+
+                lobbyType.GetMethod(
+                    "ApplyNetworkRoomState").Invoke(
+                        lobby,
+                        new object[]
+                        {
+                    snapshot,
+                    7u
+                        });
+
+                MethodInfo selectMethod =
+                    lobbyType.GetMethod(
+                        "SelectLocalRangedCharacter",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(selectMethod, Is.Not.Null);
+
+                selectMethod.Invoke(
+                    lobby,
+                    null);
+
+                Assert.That(
+                    client.SetPlayerSelectionCallCount,
+                    Is.EqualTo(1));
+
+                Assert.That(
+                    client.LastCharacter,
+                    Is.EqualTo(CharacterId.Ranged));
+
+                Assert.That(
+                    client.LastDifficulty,
+                    Is.EqualTo(DifficultyId.Normal));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    lobbyObject);
+            }
+        }
+
+        [Test]
+        public void RoomLobbyReady_SendsReadyRequest()
+        {
+            Type lobbyType =
+                FindType("RoomLobbyView");
+
+            var lobbyObject =
+                new GameObject("RoomLobbyReadyTests");
+
+            try
+            {
+                Component lobby =
+                    lobbyObject.AddComponent(lobbyType);
+
+                var client =
+                    new RecordingRoomNetworkClient();
+
+                lobbyType.GetMethod(
+                    "BindNetworkClient").Invoke(
+                        lobby,
+                        new object[]
+                        {
+                    client
+                        });
+
+                var snapshot =
+                    new RoomStateSnapshot(
+                        "ROOM-1",
+                        RoomStateStatus.Waiting,
+                        DifficultyId.Normal,
+                        new List<RoomPlayerSnapshot>
+                        {
+                    new RoomPlayerSnapshot(
+                        7u,
+                        true,
+                        false,
+                        CharacterId.Ranged,
+                        "Host")
+                        });
+
+                lobbyType.GetMethod(
+                    "ApplyNetworkRoomState").Invoke(
+                        lobby,
+                        new object[]
+                        {
+                    snapshot,
+                    7u
+                        });
+
+                lobbyType.GetMethod(
+                    "ToggleLocalPlayerReady").Invoke(
+                        lobby,
+                        null);
+
+                Assert.That(
+                    client.SetReadyCallCount,
+                    Is.EqualTo(1),
+                    "Ready button must send through " +
+                    "the network client.");
+
+                Assert.That(
+                    client.LastReady,
+                    Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    lobbyObject);
+            }
+        }
+
+        [Test]
+        public void RoomLobbyStartGame_SendsStartRequest()
+        {
+            Type lobbyType =
+                FindType("RoomLobbyView");
+
+            var lobbyObject =
+                new GameObject("RoomLobbyStartGameTests");
+
+            try
+            {
+                Component lobby =
+                    lobbyObject.AddComponent(lobbyType);
+
+                var client =
+                    new RecordingRoomNetworkClient();
+
+                lobbyType.GetMethod(
+                    "BindNetworkClient").Invoke(
+                        lobby,
+                        new object[]
+                        {
+                    client
+                        });
+
+                var snapshot =
+                    new RoomStateSnapshot(
+                        "ROOM-1",
+                        RoomStateStatus.Waiting,
+                        DifficultyId.Normal,
+                        new List<RoomPlayerSnapshot>
+                        {
+                    new RoomPlayerSnapshot(
+                        7u,
+                        true,
+                        true,
+                        CharacterId.Ranged,
+                        "Host"),
+                    new RoomPlayerSnapshot(
+                        8u,
+                        false,
+                        true,
+                        CharacterId.Ranged,
+                        "Client")
+                        });
+
+                lobbyType.GetMethod(
+                    "ApplyNetworkRoomState").Invoke(
+                        lobby,
+                        new object[]
+                        {
+                    snapshot,
+                    7u
+                        });
+
+                lobbyType.GetMethod(
+                    "HandleStartGamePrototype").Invoke(
+                        lobby,
+                        null);
+
+                Assert.That(
+                    client.StartGameCallCount,
+                    Is.EqualTo(1),
+                    "Host start button must send through " +
+                    "the network client.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    lobbyObject);
+            }
+        }
+
+        [Test]
+        public void RoomLobbyDifficulty_SendsHostCharacterAndNormalDifficulty()
+        {
+            Type lobbyType =
+                FindType("RoomLobbyView");
+
+            var lobbyObject =
+                new GameObject("RoomLobbyDifficultyTests");
+
+            try
+            {
+                Component lobby =
+                    lobbyObject.AddComponent(lobbyType);
+
+                var client =
+                    new RecordingRoomNetworkClient();
+
+                lobbyType.GetMethod(
+                    "BindNetworkClient").Invoke(
+                        lobby,
+                        new object[]
+                        {
+                    client
+                        });
+
+                var snapshot =
+                    new RoomStateSnapshot(
+                        "ROOM-1",
+                        RoomStateStatus.Waiting,
+                        DifficultyId.None,
+                        new List<RoomPlayerSnapshot>
+                        {
+                    new RoomPlayerSnapshot(
+                        7u,
+                        true,
+                        false,
+                        CharacterId.Ranged,
+                        "Host")
+                        });
+
+                lobbyType.GetMethod(
+                    "ApplyNetworkRoomState").Invoke(
+                        lobby,
+                        new object[]
+                        {
+                    snapshot,
+                    7u
+                        });
+
+                MethodInfo selectDifficultyMethod =
+                    lobbyType.GetMethod(
+                        "SelectLocalNormalDifficulty",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    selectDifficultyMethod,
+                    Is.Not.Null,
+                    "RoomLobbyView must handle the " +
+                    "normal difficulty card.");
+
+                selectDifficultyMethod.Invoke(
+                    lobby,
+                    null);
+
+                Assert.That(
+                    client.SetPlayerSelectionCallCount,
+                    Is.EqualTo(1));
+
+                Assert.That(
+                    client.LastCharacter,
+                    Is.EqualTo(CharacterId.Ranged));
+
+                Assert.That(
+                    client.LastDifficulty,
+                    Is.EqualTo(DifficultyId.Normal));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    lobbyObject);
+            }
+        }
+
         private sealed class RecordingRoomNetworkClient
             : IRoomNetworkClient
         {
+            public int SetPlayerSelectionCallCount
+            {
+                get;
+                private set;
+            }
+
+            public CharacterId LastCharacter
+            {
+                get;
+                private set;
+            }
+
+            public DifficultyId LastDifficulty
+            {
+                get;
+                private set;
+            }
+
+            public int SetReadyCallCount
+            {
+                get;
+                private set;
+            }
+
+            public bool LastReady
+            {
+                get;
+                private set;
+            }
+
+            public int StartGameCallCount
+            {
+                get;
+                private set;
+            }
+
             public event Action<NetworkClientState>
                 StateChanged;
 
+            public event Action<string>
+                ErrorReceived;
+
             public event Action<RoomStateSnapshot>
                 RoomStateChanged;
+
+            public event Action
+                GameStarted;
 
             public uint PlayerId
             {
@@ -976,6 +1988,12 @@ namespace TopDownRoguelike.Tests.EditMode
                 private set;
             }
 
+            public int LeaveRoomCallCount
+            {
+                get;
+                private set;
+            }
+
             public string LastNickname
             {
                 get;
@@ -1020,6 +2038,32 @@ namespace TopDownRoguelike.Tests.EditMode
                 LastNickname = nickname;
             }
 
+            public void SetPlayerSelection(
+                CharacterId character,
+                DifficultyId difficulty)
+            {
+                SetPlayerSelectionCallCount++;
+                LastCharacter = character;
+                LastDifficulty = difficulty;
+            }
+
+            public void SetReady(
+                bool ready)
+            {
+                SetReadyCallCount++;
+                LastReady = ready;
+            }
+
+            public void StartGame()
+            {
+                StartGameCallCount++;
+            }
+
+            public void LeaveRoom()
+            {
+                LeaveRoomCallCount++;
+            }
+
             public void Disconnect()
             {
                 DisconnectCallCount++;
@@ -1046,6 +2090,18 @@ namespace TopDownRoguelike.Tests.EditMode
 
                 RoomStateChanged?.Invoke(
                     snapshot);
+            }
+
+            public void EmitGameStarted()
+            {
+                GameStarted?.Invoke();
+            }
+
+            public void EmitError(
+                string message)
+            {
+                ErrorReceived?.Invoke(
+                    message);
             }
 
             public void SetState(

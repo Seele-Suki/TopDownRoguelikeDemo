@@ -894,6 +894,48 @@ int main()
             return 1;
         }
 
+        const auto guestDisconnectedSnapshot =
+            tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::
+                RoomStateSnapshot,
+                tdr::protocol::
+                RoomStateSnapshotCodec::Encode(
+                    coordinator.BuildRoomStateSnapshot(
+                        "ROOM-1"
+                    )
+                )
+            );
+
+        try
+        {
+            const auto receivedSnapshot =
+                ReceiveWithTimeout(
+                    client.NativeHandle(),
+                    guestDisconnectedSnapshot.size()
+                );
+
+            if (receivedSnapshot !=
+                guestDisconnectedSnapshot)
+            {
+                std::cerr
+                    << "[FAIL] Guest disconnect sent "
+                    << "the wrong room snapshot."
+                    << std::endl;
+
+                return 1;
+            }
+        }
+        catch (const std::exception& exception)
+        {
+            std::cerr
+                << "[FAIL] Guest disconnect did not "
+                << "broadcast the updated room snapshot: "
+                << exception.what()
+                << std::endl;
+
+            return 1;
+        }
+
         tdr::net::UdpSocket udpClient;
         udpClient.Bind(0);
         SetReceiveTimeout(

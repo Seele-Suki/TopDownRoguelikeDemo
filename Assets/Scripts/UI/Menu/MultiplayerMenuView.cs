@@ -38,6 +38,11 @@ namespace TopDownRoguelike.Menu.UI
         private IRoomNetworkClient networkClient;
         private RoomConnectionFlow connectionFlow;
 
+        private string activeConnectionAddress =
+            string.Empty;
+
+        private int activeConnectionPort;
+
         [Header("Input")]
         [SerializeField] private TMP_InputField nicknameInput;
         [SerializeField] private TMP_InputField addressInput;
@@ -50,11 +55,19 @@ namespace TopDownRoguelike.Menu.UI
         {
             if (networkClient != null)
             {
+                networkClient.Disconnect();
+
                 networkClient.StateChanged -=
                     HandleNetworkClientStateChanged;
 
                 networkClient.RoomStateChanged -=
                     HandleRoomStateChanged;
+
+                networkClient.GameStarted -=
+                    HandleGameStarted;
+
+                networkClient.ErrorReceived -=
+                    HandleNetworkError;
             }
 
             connectionFlow?.Dispose();
@@ -166,6 +179,12 @@ namespace TopDownRoguelike.Menu.UI
                 joinFields.SetActive(false);
             }
 
+            activeConnectionAddress =
+                request.Address;
+
+            activeConnectionPort =
+                request.Port;
+
             try
             {
                 serverProcessLauncher?.PrepareForHost();
@@ -239,6 +258,12 @@ namespace TopDownRoguelike.Menu.UI
 
             ClearValidation();
 
+            activeConnectionAddress =
+                request.Address;
+
+            activeConnectionPort =
+                request.Port;
+
             isConnecting =
                 true;
 
@@ -301,10 +326,36 @@ namespace TopDownRoguelike.Menu.UI
 
         public void HandleLeaveRoom()
         {
+            if (networkClient != null)
+            {
+                if (networkClient.State ==
+                    NetworkClientState.InRoom)
+                {
+                    try
+                    {
+                        networkClient.LeaveRoom();
+                    }
+                    catch (Exception exception)
+                    {
+                        ShowValidation(
+                            "退出房间请求失败：" +
+                            exception.Message);
+                    }
+                }
+
+                networkClient.Disconnect();
+            }
+
             if (roomLobbyView != null)
             {
                 roomLobbyView.ResetLocalRoom();
             }
+
+            activeConnectionAddress =
+                string.Empty;
+
+            activeConnectionPort =
+                0;
 
             if (roomLobbyPanel != null)
             {
@@ -393,6 +444,38 @@ namespace TopDownRoguelike.Menu.UI
                 return;
             }
 
+            if (state ==
+                    NetworkClientState.Connected &&
+                roomLobbyPanel != null &&
+                roomLobbyPanel.activeSelf)
+            {
+                if (networkClient != null)
+                {
+                    networkClient.Disconnect();
+                }
+
+                if (roomLobbyView != null)
+                {
+                    roomLobbyView.ResetLocalRoom();
+                }
+
+                roomLobbyPanel.SetActive(false);
+
+                if (joinFields != null)
+                {
+                    joinFields.SetActive(false);
+                }
+
+                if (multiplayerEntryPanel != null)
+                {
+                    multiplayerEntryPanel.SetActive(true);
+                }
+
+                ClearValidation();
+
+                return;
+            }
+
             if (state !=
                 NetworkClientState.InRoom)
             {
@@ -409,6 +492,25 @@ namespace TopDownRoguelike.Menu.UI
 
                 networkClient.RoomStateChanged +=
                     HandleRoomStateChanged;
+
+                networkClient.GameStarted -=
+                    HandleGameStarted;
+
+                networkClient.GameStarted +=
+                    HandleGameStarted;
+
+                networkClient.ErrorReceived -=
+                    HandleNetworkError;
+
+                networkClient.ErrorReceived +=
+                    HandleNetworkError;
+            }
+
+            if (roomLobbyView != null)
+            {
+                roomLobbyView.SetConnectionEndpoint(
+                    activeConnectionAddress,
+                    activeConnectionPort);
             }
 
             connectionStatusView?.Hide();
@@ -440,9 +542,34 @@ namespace TopDownRoguelike.Menu.UI
                 return;
             }
 
+            roomLobbyView.BindNetworkClient(
+                networkClient);
+
             roomLobbyView.ApplyNetworkRoomState(
                 snapshot,
                 networkClient.PlayerId);
+        }
+
+        private void HandleGameStarted()
+        {
+            if (roomLobbyView == null)
+            {
+                return;
+            }
+
+            roomLobbyView.HandleGameStarted();
+        }
+
+        private void HandleNetworkError(
+            string message)
+        {
+            isConnecting =
+                false;
+
+            ShowValidation(
+                string.IsNullOrWhiteSpace(message)
+                    ? "服务器返回未知错误。"
+                    : message);
         }
 
         private void FocusInputForParameter(

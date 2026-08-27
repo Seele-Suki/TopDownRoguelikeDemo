@@ -7,6 +7,92 @@ namespace TopDownRoguelike.Tests.EditMode
     public sealed class UdpPacketCodecTests
     {
         [Test]
+        public void PlayerInputWireValue_IsDefinedAndAcceptedAsUdp()
+        {
+            const ushort wireValue = 34;
+
+            MessageType messageType =
+                (MessageType)wireValue;
+
+            Assert.That(
+                Enum.GetName(
+                    typeof(MessageType),
+                    messageType),
+                Is.EqualTo("PlayerInput"));
+
+            var header =
+                new UdpMessageHeader(
+                    messageType,
+                    CreateToken(),
+                    7u,
+                    9u);
+
+            byte[] encoded =
+                UdpPacketCodec.Encode(
+                    header,
+                    Array.Empty<byte>());
+
+            DecodedUdpPacket decoded =
+                UdpPacketCodec.Decode(encoded);
+
+            Assert.That(
+                decoded.Header.Type,
+                Is.EqualTo(messageType));
+
+            Assert.That(
+                encoded[UdpPacketCodec.MessageTypeOffset],
+                Is.EqualTo(0x00));
+
+            Assert.That(
+                encoded[
+                    UdpPacketCodec.MessageTypeOffset + 1],
+                Is.EqualTo(0x22));
+        }
+
+        [Test]
+        public void PlayerStateSnapshotWireValue_IsDefinedAndAcceptedAsUdp()
+        {
+            const ushort wireValue = 35;
+
+            MessageType messageType =
+                (MessageType)wireValue;
+
+            Assert.That(
+                Enum.GetName(
+                    typeof(MessageType),
+                    messageType),
+                Is.EqualTo("PlayerStateSnapshot"));
+
+            var header =
+                new UdpMessageHeader(
+                    messageType,
+                    CreateToken(),
+                    7u,
+                    10u);
+
+            byte[] encoded =
+                UdpPacketCodec.Encode(
+                    header,
+                    Array.Empty<byte>());
+
+            DecodedUdpPacket decoded =
+                UdpPacketCodec.Decode(encoded);
+
+            Assert.That(
+                decoded.Header.Type,
+                Is.EqualTo(messageType));
+
+            Assert.That(
+                encoded[UdpPacketCodec.MessageTypeOffset],
+                Is.EqualTo(0x00));
+
+            Assert.That(
+                encoded[
+                    UdpPacketCodec.MessageTypeOffset + 1],
+                Is.EqualTo(0x23));
+        }
+
+        [Test]
         public void EncodeUdpPing_MatchesCppLayout()
         {
             byte[] token = CreateToken();

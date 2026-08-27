@@ -2,6 +2,7 @@ using TMPro;
 using UnityEngine;
 using TopDownRoguelike.Networking.Client;
 using TopDownRoguelike.Networking.Protocol;
+using TopDownRoguelike.Infrastructure;
 using System;
 
 namespace TopDownRoguelike.Menu.UI
@@ -16,6 +17,10 @@ namespace TopDownRoguelike.Menu.UI
 
         [Header("Room Lobby")]
         [SerializeField] private RoomLobbyView roomLobbyView;
+
+        [Header("Scene Transition")]
+        [SerializeField]
+        private SceneLoader sceneLoader;
 
         [Header("Connection")]
         [SerializeField]
@@ -43,6 +48,8 @@ namespace TopDownRoguelike.Menu.UI
 
         private int activeConnectionPort;
 
+        private bool isTransitioningToGameplay;
+
         [Header("Input")]
         [SerializeField] private TMP_InputField nicknameInput;
         [SerializeField] private TMP_InputField addressInput;
@@ -55,7 +62,10 @@ namespace TopDownRoguelike.Menu.UI
         {
             if (networkClient != null)
             {
-                networkClient.Disconnect();
+                if (!isTransitioningToGameplay)
+                {
+                    networkClient.Disconnect();
+                }
 
                 networkClient.StateChanged -=
                     HandleNetworkClientStateChanged;
@@ -552,12 +562,98 @@ namespace TopDownRoguelike.Menu.UI
 
         private void HandleGameStarted()
         {
-            if (roomLobbyView == null)
+            roomLobbyView?.HandleGameStarted();
+
+            if (!TryPrepareGameplaySession())
             {
                 return;
             }
 
-            roomLobbyView.HandleGameStarted();
+            if (sceneLoader == null)
+            {
+                ShowValidation(
+                    "SceneLoader 未配置，无法进入游戏。");
+
+                return;
+            }
+
+            isTransitioningToGameplay = true;
+
+            sceneLoader.LoadGameplayScene();
+        }
+
+        private bool TryPrepareGameplaySession()
+        {
+            if (networkClient == null)
+            {
+                ShowValidation(
+                    "网络客户端不存在，无法进入游戏。");
+
+                return false;
+            }
+
+            RoomStateSnapshot snapshot =
+                networkClient.CurrentRoomState;
+
+            uint localPlayerId =
+                networkClient.PlayerId;
+
+            if (snapshot == null ||
+                localPlayerId == 0u)
+            {
+                ShowValidation(
+                    "房间或玩家身份数据不完整。");
+
+                return false;
+            }
+
+            RoomPlayerSnapshot localPlayer = null;
+
+            foreach (RoomPlayerSnapshot player
+                in snapshot.Players)
+            {
+                if (player.PlayerId == localPlayerId)
+                {
+                    localPlayer = player;
+                    break;
+                }
+            }
+
+            if (localPlayer == null)
+            {
+                ShowValidation(
+                    "房间中找不到本地玩家。");
+
+                return false;
+            }
+
+            if (localPlayer.Character ==
+                    CharacterId.None ||
+                snapshot.SelectedDifficulty ==
+                    DifficultyId.None)
+            {
+                ShowValidation(
+                    "角色或难度数据不完整。");
+
+                return false;
+            }
+
+            if (localPlayer.IsHost)
+            {
+                GameSession.ConfigureMultiplayerHost();
+            }
+            else
+            {
+                GameSession.ConfigureMultiplayerClient();
+            }
+
+            GameSession.SelectCharacter(
+                localPlayer.Character);
+
+            GameSession.SelectDifficulty(
+                snapshot.SelectedDifficulty);
+
+            return true;
         }
 
         private void HandleNetworkError(

@@ -27,7 +27,10 @@ namespace tdr::protocol
         UdpBindRequest = 30,
         UdpBindAccepted = 31,
         UdpPing = 32,
-        UdpPong = 33
+        UdpPong = 33,
+
+        PlayerInput = 34,
+        PlayerStateSnapshot = 35
     };
 
     [[nodiscard]]
@@ -55,6 +58,8 @@ namespace tdr::protocol
         case MessageType::UdpBindAccepted:
         case MessageType::UdpPing:
         case MessageType::UdpPong:
+        case MessageType::PlayerInput:
+        case MessageType::PlayerStateSnapshot:
             return true;
 
         case MessageType::Invalid:
@@ -74,6 +79,8 @@ namespace tdr::protocol
         case MessageType::UdpBindAccepted:
         case MessageType::UdpPing:
         case MessageType::UdpPong:
+        case MessageType::PlayerInput:
+        case MessageType::PlayerStateSnapshot:
             return true;
 
         default:

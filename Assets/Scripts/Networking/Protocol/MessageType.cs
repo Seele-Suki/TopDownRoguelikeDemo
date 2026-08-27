@@ -23,6 +23,9 @@ namespace TopDownRoguelike.Networking.Protocol
         UdpBindRequest = 30,
         UdpBindAccepted = 31,
         UdpPing = 32,
-        UdpPong = 33
+        UdpPong = 33,
+
+        PlayerInput = 34,
+        PlayerStateSnapshot = 35
     }
 }

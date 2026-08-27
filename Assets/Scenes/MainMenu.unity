@@ -394,6 +394,7 @@ MonoBehaviour:
   joinFields: {fileID: 1966326402}
   roomLobbyPanel: {fileID: 1767518249}
   roomLobbyView: {fileID: 1767518253}
+  sceneLoader: {fileID: 2040825822}
   connectionStatusView: {fileID: 1685952413}
   networkClientBehaviour: {fileID: 2065891686}
   serverProcessLauncher: {fileID: 2065891688}

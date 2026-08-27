@@ -65,6 +65,40 @@ namespace
                 MessageType::UdpPong) == 33,
             "UdpPong wire value changed."
         );
+
+        Require(
+            IsKnownMessageType(MessageType::PlayerInput),
+            "PlayerInput was not recognized."
+        );
+
+        Require(
+            IsUdpMessageType(MessageType::PlayerInput),
+            "PlayerInput was not classified as UDP."
+        );
+
+        Require(
+            static_cast<std::uint16_t>(
+                MessageType::PlayerInput) == 34,
+            "PlayerInput wire value changed."
+        );
+
+        Require(
+            IsKnownMessageType(
+                MessageType::PlayerStateSnapshot),
+            "PlayerStateSnapshot was not recognized."
+        );
+
+        Require(
+            IsUdpMessageType(
+                MessageType::PlayerStateSnapshot),
+            "PlayerStateSnapshot was not classified as UDP."
+        );
+
+        Require(
+            static_cast<std::uint16_t>(
+                MessageType::PlayerStateSnapshot) == 35,
+            "PlayerStateSnapshot wire value changed."
+        );
     }
 
     void UdpMessageHeaderUsesStableWireLayout()

@@ -951,6 +951,8 @@ namespace TopDownRoguelike.Tests.EditMode
             var client =
                 new RecordingRoomNetworkClient();
 
+            GameSession.Reset();
+
             try
             {
                 Component menu =
@@ -1063,12 +1065,81 @@ namespace TopDownRoguelike.Tests.EditMode
                     messageText.text,
                     Is.EqualTo(
                         "服务器已确认开始游戏"));
+
+                Assert.That(
+                    GameSession.CurrentMode,
+                    Is.EqualTo(GameMode.MultiplayerHost));
+
+                Assert.That(
+                    GameSession.SelectedCharacter,
+                    Is.EqualTo(CharacterId.Ranged));
+
+                Assert.That(
+                    GameSession.SelectedDifficulty,
+                    Is.EqualTo(DifficultyId.Normal));
             }
             finally
             {
+                GameSession.Reset();
+
                 UnityEngine.Object.DestroyImmediate(
                     lobbyObject);
 
+                UnityEngine.Object.DestroyImmediate(
+                    menuObject);
+            }
+        }
+
+        [Test]
+        public void OnDestroyDuringGameplayTransition_DoesNotDisconnectClient()
+        {
+            Type menuType =
+                FindType(
+                    "TopDownRoguelike.Menu.UI." +
+                    "MultiplayerMenuView");
+
+            Assert.That(menuType, Is.Not.Null);
+
+            var menuObject =
+                new GameObject(
+                    "Gameplay Transition Menu Test");
+
+            var client =
+                new RecordingRoomNetworkClient();
+
+            try
+            {
+                Component menu =
+                    menuObject.AddComponent(menuType);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "networkClient",
+                    client);
+
+                SetField(
+                    menuType,
+                    menu,
+                    "isTransitioningToGameplay",
+                    true);
+
+                MethodInfo onDestroy =
+                    menuType.GetMethod(
+                        "OnDestroy",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(onDestroy, Is.Not.Null);
+
+                onDestroy.Invoke(menu, null);
+
+                Assert.That(
+                    client.DisconnectCallCount,
+                    Is.EqualTo(0));
+            }
+            finally
+            {
                 UnityEngine.Object.DestroyImmediate(
                     menuObject);
             }

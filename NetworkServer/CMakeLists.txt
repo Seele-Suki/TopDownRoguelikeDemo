@@ -50,6 +50,10 @@ add_executable(NetworkServer
     src/protocol/UdpSequenceTracker.h
     src/protocol/RoomStateSnapshotCodec.h
     src/protocol/RoomStateSnapshotCodec.cpp
+    src/protocol/PlayerInputCodec.h
+    src/protocol/PlayerInputCodec.cpp
+    src/protocol/PlayerStateSnapshotCodec.h
+    src/protocol/PlayerStateSnapshotCodec.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -747,5 +751,37 @@ endif()
 add_test(
     NAME RoomStateSnapshotCodecTests
     COMMAND RoomStateSnapshotCodecTests
+)
+
+add_executable(PlayerSyncCodecTests
+    tests/PlayerSyncCodecTests.cpp
+
+    src/protocol/PlayerInputCodec.cpp
+    src/protocol/PlayerStateSnapshotCodec.h
+    src/protocol/PlayerStateSnapshotCodec.cpp
+    src/protocol/NetworkByteOrder.h
+)
+
+target_include_directories(PlayerSyncCodecTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(PlayerSyncCodecTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(PlayerSyncCodecTests
+        PRIVATE
+            ws2_32
+    )
+endif()
+
+add_test(
+    NAME PlayerSyncCodecTests
+    COMMAND PlayerSyncCodecTests
 )
 endif()

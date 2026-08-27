@@ -1,84 +1,120 @@
+using System;
 using TopDownRoguelike.Gameplay.Characters;
 using UnityEngine;
 
 public class PlayerController : MonoBehaviour
 {
-    [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private Camera mainCamera;
+    [SerializeField]
+    private float moveSpeed = 5f;
 
     private Rigidbody2D rb;
     private Vector2 moveInput;
-    private Vector2 mouseWorldPosition;
+    private Vector2 aimDirection;
     private PlayerHealth playerHealth;
+    private IPlayerInputSource inputSource;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        playerHealth = GetComponent<PlayerHealth>();
 
-        if (mainCamera == null)
+        playerHealth =
+            GetComponent<PlayerHealth>();
+
+        inputSource =
+            GetComponent<IPlayerInputSource>();
+
+        if (inputSource == null)
         {
-            mainCamera = Camera.main;
+            if (rb != null)
+            {
+                rb.velocity =
+                    Vector2.zero;
+            }
+
+            Debug.LogError(
+                "PlayerController requires an " +
+                "IPlayerInputSource component.",
+                this);
+
+            enabled =
+                false;
         }
     }
 
     private void Update()
     {
-        if (playerHealth != null && playerHealth.IsDead)
+        if (playerHealth != null &&
+            playerHealth.IsDead)
         {
             return;
         }
-        ReadMovementInput();
-        ReadMousePosition();
+
+        moveInput =
+            inputSource.MoveDirection;
+
+        aimDirection =
+            inputSource.AimDirection;
     }
 
     private void FixedUpdate()
     {
-        if (playerHealth != null && playerHealth.IsDead)
+        if (playerHealth != null &&
+            playerHealth.IsDead)
         {
             return;
         }
+
         Move();
-        RotateToMouse();
+        RotateToAimDirection();
     }
 
-    private void ReadMovementInput()
+    public void SetInputSource(
+        IPlayerInputSource newInputSource)
     {
-        float horizontal = Input.GetAxisRaw("Horizontal");
-        float vertical = Input.GetAxisRaw("Vertical");
-
-        moveInput = new Vector2(horizontal, vertical).normalized;
-    }
-
-    private void ReadMousePosition()
-    {
-        Vector3 mouseScreenPosition = Input.mousePosition;
-        Vector3 worldPosition = mainCamera.ScreenToWorldPoint(mouseScreenPosition);
-
-        mouseWorldPosition = worldPosition;
-    }
-
-    private void Move()
-    {
-        rb.velocity = moveInput * moveSpeed;
-        if (playerHealth != null && playerHealth.IsDead)
+        if (newInputSource == null)
         {
-            rb.velocity = Vector2.zero;
-            return;
+            throw new ArgumentNullException(
+                nameof(newInputSource));
         }
-    }
 
-    private void RotateToMouse()
-    {
-        Vector2 aimDirection = mouseWorldPosition - rb.position;
-        float angle = Mathf.Atan2(aimDirection.y, aimDirection.x) * Mathf.Rad2Deg;
+        inputSource =
+            newInputSource;
 
-        rb.rotation = angle;
+        enabled =
+            true;
     }
 
     public void AddMoveSpeed(float amount)
     {
         moveSpeed += amount;
-        moveSpeed = Mathf.Max(0f, moveSpeed);
+
+        moveSpeed =
+            Mathf.Max(
+                0f,
+                moveSpeed);
+    }
+
+    private void Move()
+    {
+        rb.velocity =
+            moveInput * moveSpeed;
+    }
+
+    private void RotateToAimDirection()
+    {
+        if (aimDirection.sqrMagnitude <
+            0.0001f)
+        {
+            return;
+        }
+
+        float angle =
+            Mathf.Atan2(
+                aimDirection.y,
+                aimDirection.x) *
+            Mathf.Rad2Deg;
+
+        rb.rotation =
+            angle;
     }
 }

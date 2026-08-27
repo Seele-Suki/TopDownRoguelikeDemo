@@ -13,11 +13,14 @@ namespace TopDownRoguelike.Gameplay.Characters
         private int currentHealth;
         private bool isDead;
         public event Action OnDied;
+        public event Action<int, int> OnHealthChanged;
 
         [SerializeField] private bool isInvulnerable;
 
         public bool IsDead => isDead;
         public bool IsInvulnerable => isInvulnerable;
+        public int CurrentHealth => currentHealth;
+        public int MaxHealth => maxHealth;
 
         private void Awake()
         {
@@ -44,7 +47,10 @@ namespace TopDownRoguelike.Gameplay.Characters
             if (currentHealth <= 0)
             {
                 Die();
+                return;
             }
+
+            NotifyHealthChanged();
         }
 
         private void Die()
@@ -56,6 +62,8 @@ namespace TopDownRoguelike.Gameplay.Characters
 
             isDead = true;
             currentHealth = 0;
+
+            NotifyHealthChanged();
 
             Debug.Log("Player died.");
 
@@ -78,6 +86,15 @@ namespace TopDownRoguelike.Gameplay.Characters
             }
 
             currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+
+            NotifyHealthChanged();
+        }
+
+        private void NotifyHealthChanged()
+        {
+            OnHealthChanged?.Invoke(
+                currentHealth,
+                maxHealth);
         }
     }
 }

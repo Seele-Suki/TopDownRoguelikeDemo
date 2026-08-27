@@ -329,6 +329,8 @@ namespace TopDownRoguelike.Networking.Protocol
                 case MessageType.UdpBindAccepted:
                 case MessageType.UdpPing:
                 case MessageType.UdpPong:
+                case MessageType.PlayerInput:
+                case MessageType.PlayerStateSnapshot:
                     return true;
 
                 default:

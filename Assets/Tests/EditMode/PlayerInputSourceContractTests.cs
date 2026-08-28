@@ -41,6 +41,40 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void ContractExposesReadOnlyFireState()
+        {
+            Type inputSourceType =
+                FindType(InputSourceTypeName);
+
+            Assert.That(
+                inputSourceType,
+                Is.Not.Null,
+                $"{InputSourceTypeName} must exist.");
+
+            PropertyInfo fireProperty =
+                inputSourceType.GetProperty(
+                    "IsFireHeld");
+
+            Assert.That(
+                fireProperty,
+                Is.Not.Null,
+                "IPlayerInputSource must expose IsFireHeld.");
+
+            Assert.That(
+                fireProperty.PropertyType,
+                Is.EqualTo(typeof(bool)));
+
+            Assert.That(
+                fireProperty.CanRead,
+                Is.True);
+
+            Assert.That(
+                fireProperty.CanWrite,
+                Is.False,
+                "IsFireHeld must be read-only.");
+        }
+
+        [Test]
         public void LocalInputSourceIsMonoBehaviourAndImplementsContract()
         {
             Type inputSourceType =

@@ -90,6 +90,60 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void ApplyInputWithFireState_StoresFireHeldState()
+        {
+            Component remoteInput =
+                CreateRemoteInput(
+                    out GameObject inputObject);
+
+            try
+            {
+                MethodInfo applyInputMethod =
+                    remoteInput.GetType().GetMethod(
+                        "ApplyInputWithFireState",
+                        new[]
+                        {
+                    typeof(Vector2),
+                    typeof(Vector2),
+                    typeof(bool)
+                        });
+
+                Assert.That(
+                    applyInputMethod,
+                    Is.Not.Null,
+                    "ApplyInput must accept FireHeld.");
+
+                applyInputMethod.Invoke(
+                    remoteInput,
+                    new object[]
+                    {
+                Vector2.zero,
+                Vector2.right,
+                true
+                    });
+
+                PropertyInfo fireProperty =
+                    remoteInput.GetType().GetProperty(
+                        "IsFireHeld");
+
+                Assert.That(
+                    fireProperty,
+                    Is.Not.Null,
+                    "RemotePlayerInputSource must expose IsFireHeld.");
+
+                Assert.That(
+                    (bool)fireProperty.GetValue(
+                        remoteInput),
+                    Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    inputObject);
+            }
+        }
+
+        [Test]
         public void ApplyInput_ClampsMovementMagnitudeToOne()
         {
             Component remoteInput =

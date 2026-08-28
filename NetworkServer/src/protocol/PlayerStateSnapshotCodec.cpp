@@ -10,6 +10,9 @@
 
 namespace
 {
+    constexpr std::uint32_t kFireHeldFlag = 1U;
+    constexpr std::uint32_t kKnownFlags = kFireHeldFlag;
+
     using tdr::protocol::PlayerStateRecord;
 
     static_assert(
@@ -230,7 +233,10 @@ namespace tdr::protocol
                 player.aimY
             );
 
-            AppendNetwork32(encoded, 0U);
+            AppendNetwork32(
+                encoded,
+                player.flags & kKnownFlags
+            );
         }
 
         return encoded;
@@ -299,15 +305,18 @@ namespace tdr::protocol
             player.aimY =
                 ReadNetworkFloat(data, offset);
 
-            const std::uint32_t reserved =
+            const std::uint32_t flags =
                 ReadNetwork32(data, offset);
 
-            if (reserved != 0U)
+            if ((flags & ~kKnownFlags) != 0U)
             {
                 throw std::invalid_argument(
-                    "Player state reserved field must be zero."
+                    "Player state contains unknown flags."
                 );
             }
+
+            player.flags =
+                flags;
 
             snapshot.players.push_back(
                 std::move(player)

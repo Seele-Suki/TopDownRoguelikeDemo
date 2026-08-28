@@ -56,6 +56,14 @@ namespace TopDownRoguelike.Gameplay.Characters
             }
         }
 
+        public bool IsFireHeld
+        {
+            get
+            {
+                return Input.GetMouseButton(0);
+            }
+        }
+
         private void Awake()
         {
             if (mainCamera == null)

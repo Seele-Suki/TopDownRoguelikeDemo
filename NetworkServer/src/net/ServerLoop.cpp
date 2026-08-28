@@ -12,6 +12,7 @@
 #include <array>
 #include <cstdint>
 #include <vector>
+#include <iostream>
 
 namespace tdr::net
 {
@@ -26,7 +27,8 @@ namespace tdr::net
         udpBindHandler_(coordinator),
         udpPingHandler_(coordinator),
         playerInputForwarder_(coordinator),
-        playerStateForwarder_(coordinator)
+        playerStateForwarder_(coordinator),
+        playerShotEventForwarder_(coordinator)
     {
         if (!listener_.IsListening())
         {
@@ -161,22 +163,41 @@ namespace tdr::net
                         break;
                     }
 
+                    case tdr::protocol::MessageType::
+                    PlayerShotEvent:
+                    {
+                        auto forwarded =
+                            playerShotEventForwarder_.Forward(
+                                receiveBuffer.data(),
+                                receivedByteCount,
+                                sourceAddress
+                            );
+
+                        response =
+                            std::move(
+                                forwarded.bytes
+                            );
+
+                        responseDestination =
+                            forwarded.destination;
+
+                        break;
+                    }
+
                     default:
                         throw std::invalid_argument(
                             "Unsupported UDP message type."
                         );
                     }
                 }
-                catch (const std::invalid_argument&)
+                catch (const std::exception& exception)
                 {
-                    continue;
-                }
-                catch (const std::out_of_range&)
-                {
-                    continue;
-                }
-                catch (const std::runtime_error&)
-                {
+                    std::cerr
+                        << "[UDP] PlayerShotEvent or other UDP packet "
+                        << "was rejected: "
+                        << exception.what()
+                        << std::endl;
+
                     continue;
                 }
 

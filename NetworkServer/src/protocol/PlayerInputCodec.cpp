@@ -10,6 +10,9 @@ namespace
 {
     using tdr::protocol::PlayerInputPayload;
 
+    constexpr std::uint32_t kFireHeldFlag = 1U;
+    constexpr std::uint32_t kKnownFlags = kFireHeldFlag;
+
     static_assert(
         sizeof(float) == sizeof(std::uint32_t),
         "Player synchronization requires 32-bit floats."
@@ -143,7 +146,10 @@ namespace tdr::protocol
         AppendNetworkFloat(encoded, input.moveY);
         AppendNetworkFloat(encoded, input.aimX);
         AppendNetworkFloat(encoded, input.aimY);
-        AppendNetwork32(encoded, 0U);
+        AppendNetwork32(
+            encoded,
+            input.flags & kKnownFlags
+        );
 
         return encoded;
     }
@@ -183,13 +189,13 @@ namespace tdr::protocol
         input.aimY =
             ReadNetworkFloat(data, offset);
 
-        const std::uint32_t reserved =
+        input.flags =
             ReadNetwork32(data, offset);
 
-        if (reserved != 0U)
+        if ((input.flags & ~kKnownFlags) != 0U)
         {
             throw std::invalid_argument(
-                "Player input reserved field must be zero."
+                "Player input contains unknown flags."
             );
         }
 

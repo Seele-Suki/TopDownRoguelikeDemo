@@ -30,7 +30,8 @@ namespace tdr::protocol
         UdpPong = 33,
 
         PlayerInput = 34,
-        PlayerStateSnapshot = 35
+        PlayerStateSnapshot = 35,
+        PlayerShotEvent = 36
     };
 
     [[nodiscard]]
@@ -60,6 +61,7 @@ namespace tdr::protocol
         case MessageType::UdpPong:
         case MessageType::PlayerInput:
         case MessageType::PlayerStateSnapshot:
+        case MessageType::PlayerShotEvent:
             return true;
 
         case MessageType::Invalid:
@@ -81,6 +83,7 @@ namespace tdr::protocol
         case MessageType::UdpPong:
         case MessageType::PlayerInput:
         case MessageType::PlayerStateSnapshot:
+        case MessageType::PlayerShotEvent:
             return true;
 
         default:

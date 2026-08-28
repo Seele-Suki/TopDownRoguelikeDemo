@@ -17,6 +17,10 @@ namespace TopDownRoguelike.Tests.EditMode
         private const string PlayerControllerTypeName =
             "PlayerController";
 
+        private const string RemoteInputSourceTypeName =
+            "TopDownRoguelike.Gameplay.Networking." +
+            "RemotePlayerInputSource";
+
         [Test]
         public void Advance_PublishesTwoRegisteredPlayersAtTwentyHertz()
         {
@@ -30,6 +34,14 @@ namespace TopDownRoguelike.Tests.EditMode
 
             Type controllerType =
                 FindType(PlayerControllerTypeName);
+
+            Type remoteInputSourceType =
+                FindType(RemoteInputSourceTypeName);
+
+            Assert.That(
+                remoteInputSourceType,
+                Is.Not.Null,
+                "RemotePlayerInputSource must exist.");
 
             Assert.That(
                 controllerType,
@@ -63,6 +75,10 @@ namespace TopDownRoguelike.Tests.EditMode
                 Component secondController =
                     secondPlayer.AddComponent(controllerType);
 
+                Component secondInputSource =
+                    secondPlayer.AddComponent(
+                        remoteInputSourceType);
+
                 SetPrivateField(
                     firstController,
                     "aimDirection",
@@ -72,6 +88,30 @@ namespace TopDownRoguelike.Tests.EditMode
                     secondController,
                     "aimDirection",
                     Vector2.up);
+
+                MethodInfo applyInputMethod =
+                    remoteInputSourceType.GetMethod(
+                        "ApplyInputWithFireState",
+                        new[]
+                {
+                    typeof(Vector2),
+                    typeof(Vector2),
+                    typeof(bool)
+                });
+
+                Assert.That(
+                    applyInputMethod,
+                    Is.Not.Null,
+                    "ApplyInputWithFireState must exist.");
+
+                applyInputMethod.Invoke(
+                    secondInputSource,
+                    new object[]
+                    {
+                        Vector2.zero,
+                        Vector2.up,
+                        true
+                    });
 
                 var registry =
                     new NetworkPlayerRegistry();
@@ -148,6 +188,11 @@ namespace TopDownRoguelike.Tests.EditMode
                     4.25f,
                     0f,
                     1f);
+
+                Assert.That(
+                    snapshot.Players[1].FireHeld,
+                    Is.True,
+                    "Host snapshot must include FireHeld.");
 
                 InvokeAdvance(publisher, 0.051f);
 
@@ -409,6 +454,125 @@ namespace TopDownRoguelike.Tests.EditMode
                 UnityEngine.Object.DestroyImmediate(
                     remotePlayer);
             }
+        }
+
+        [Test]
+        public void RemotePlayerInterpolator_StoresFireHeldFromSnapshot()
+        {
+            Type interpolatorType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "RemotePlayerInterpolator");
+
+            Assert.That(
+                interpolatorType,
+                Is.Not.Null,
+                "RemotePlayerInterpolator must exist.");
+
+            GameObject remotePlayer =
+                new GameObject(
+                    "Remote Player Fire State Test");
+
+            try
+            {
+                Component interpolator =
+                    remotePlayer.AddComponent(
+                        interpolatorType);
+
+                MethodInfo configureMethod =
+                    interpolatorType.GetMethod(
+                        "Configure",
+                        new[]
+                        {
+                    typeof(uint)
+                        });
+
+                Assert.That(
+                    configureMethod,
+                    Is.Not.Null,
+                    "Configure(uint) must exist.");
+
+                configureMethod.Invoke(
+                    interpolator,
+                    new object[]
+                    {
+                22u
+                    });
+
+                var snapshot =
+                    new PlayerStateSnapshotPayload(
+                        new[]
+                        {
+                    new PlayerStateRecord(
+                        22u,
+                        1f,
+                        2f,
+                        1f,
+                        0f,
+                        true)
+                        });
+
+                MethodInfo applySnapshotMethod =
+                    interpolatorType.GetMethod(
+                        "ApplySnapshot",
+                        new[]
+                        {
+                    typeof(PlayerStateSnapshotPayload)
+                        });
+
+                Assert.That(
+                    applySnapshotMethod,
+                    Is.Not.Null,
+                    "ApplySnapshot must exist.");
+
+                applySnapshotMethod.Invoke(
+                    interpolator,
+                    new object[]
+                    {
+                snapshot
+                    });
+
+                PropertyInfo fireHeldProperty =
+                    interpolatorType.GetProperty(
+                        "IsFireHeld");
+
+                Assert.That(
+                    fireHeldProperty,
+                    Is.Not.Null,
+                    "RemotePlayerInterpolator must expose IsFireHeld.");
+
+                Assert.That(
+                    (bool)fireHeldProperty.GetValue(
+                        interpolator),
+                    Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    remotePlayer);
+            }
+        }
+
+        [Test]
+        public void RemotePlayerInterpolator_ReceivesFireHeldState()
+        {
+            Type interpolatorType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "RemotePlayerInterpolator");
+
+            Assert.That(
+                interpolatorType,
+                Is.Not.Null);
+
+            PropertyInfo fireHeldProperty =
+                interpolatorType.GetProperty(
+                    "IsFireHeld");
+
+            Assert.That(
+                fireHeldProperty,
+                Is.Not.Null,
+                "RemotePlayerInterpolator must expose IsFireHeld.");
         }
 
         private static void AssertPlayerState(

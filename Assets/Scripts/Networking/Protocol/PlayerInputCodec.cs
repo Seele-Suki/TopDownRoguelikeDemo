@@ -8,18 +8,21 @@ namespace TopDownRoguelike.Networking.Protocol
             float moveX,
             float moveY,
             float aimX,
-            float aimY)
+            float aimY,
+            bool fireHeld = false)
         {
             MoveX = moveX;
             MoveY = moveY;
             AimX = aimX;
             AimY = aimY;
+            FireHeld = fireHeld;
         }
 
         public float MoveX { get; }
         public float MoveY { get; }
         public float AimX { get; }
         public float AimY { get; }
+        public bool FireHeld { get; }
     }
 
     public static class PlayerInputCodec
@@ -30,7 +33,9 @@ namespace TopDownRoguelike.Networking.Protocol
         private const int MoveYOffset = 4;
         private const int AimXOffset = 8;
         private const int AimYOffset = 12;
-        private const int ReservedOffset = 16;
+        private const int FlagsOffset = 16;
+        private const uint FireHeldFlag = 1u;
+        private const uint KnownFlags = FireHeldFlag;
 
         public static byte[] Encode(
             PlayerInputPayload input)
@@ -65,10 +70,15 @@ namespace TopDownRoguelike.Networking.Protocol
                 AimYOffset,
                 input.AimY);
 
+            uint flags =
+                input.FireHeld
+                    ? FireHeldFlag
+                    : 0u;
+
             PacketCodec.WriteNetworkUInt32(
                 payload,
-                ReservedOffset,
-                0u);
+                FlagsOffset,
+                flags);
 
             return payload;
         }
@@ -89,34 +99,27 @@ namespace TopDownRoguelike.Networking.Protocol
                     nameof(payload));
             }
 
-            uint reserved =
+            uint flags =
                 PacketCodec.ReadNetworkUInt32(
                     payload,
-                    ReservedOffset);
+                    FlagsOffset);
 
-            if (reserved != 0u)
+            if ((flags & ~KnownFlags) != 0u)
             {
                 throw new ArgumentException(
-                    "Player input reserved field must be zero.",
+                    "Player input contains unknown flags.",
                     nameof(payload));
             }
 
+            bool fireHeld =
+                (flags & FireHeldFlag) != 0u;
+
             var input = new PlayerInputPayload(
-                ReadNetworkFloat(
-                    payload,
-                    MoveXOffset),
-
-                ReadNetworkFloat(
-                    payload,
-                    MoveYOffset),
-
-                ReadNetworkFloat(
-                    payload,
-                    AimXOffset),
-
-                ReadNetworkFloat(
-                    payload,
-                    AimYOffset));
+                ReadNetworkFloat(payload, MoveXOffset),
+                ReadNetworkFloat(payload, MoveYOffset),
+                ReadNetworkFloat(payload, AimXOffset),
+                ReadNetworkFloat(payload, AimYOffset),
+                fireHeld);
 
             Validate(input);
 

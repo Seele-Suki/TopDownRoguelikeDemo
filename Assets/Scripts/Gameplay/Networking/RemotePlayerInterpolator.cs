@@ -14,6 +14,12 @@ namespace TopDownRoguelike.Gameplay.Networking
         private Vector2 targetAimDirection;
         private bool hasTarget;
 
+        public bool IsFireHeld
+        {
+            get;
+            private set;
+        }
+
         public void Configure(
             uint playerId)
         {
@@ -33,6 +39,9 @@ namespace TopDownRoguelike.Gameplay.Networking
                 Vector2.zero;
 
             hasTarget =
+                false;
+
+            IsFireHeld =
                 false;
 
             enabled =
@@ -72,6 +81,9 @@ namespace TopDownRoguelike.Gameplay.Networking
                     new Vector2(
                         state.AimX,
                         state.AimY);
+
+                IsFireHeld =
+                    state.FireHeld;
 
                 hasTarget =
                     true;
@@ -126,6 +138,9 @@ namespace TopDownRoguelike.Gameplay.Networking
         private void OnDisable()
         {
             hasTarget =
+                false;
+
+            IsFireHeld =
                 false;
         }
     }

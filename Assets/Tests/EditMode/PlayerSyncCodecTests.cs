@@ -1,5 +1,6 @@
-using System;
 using NUnit.Framework;
+using System;
+using System.Reflection;
 using TopDownRoguelike.Networking.Protocol;
 
 namespace TopDownRoguelike.Tests.EditMode
@@ -36,6 +37,79 @@ namespace TopDownRoguelike.Tests.EditMode
             Assert.That(decoded.MoveY, Is.EqualTo(-0.25f));
             Assert.That(decoded.AimX, Is.EqualTo(1.0f));
             Assert.That(decoded.AimY, Is.EqualTo(-1.0f));
+        }
+
+        [Test]
+        public void PlayerStateRecordExposesFireHeldState()
+        {
+            Type recordType =
+                typeof(PlayerStateRecord);
+
+            PropertyInfo fireHeldProperty =
+                recordType.GetProperty(
+                    "FireHeld");
+
+            Assert.That(
+                fireHeldProperty,
+                Is.Not.Null,
+                "PlayerStateRecord must expose FireHeld.");
+
+            Assert.That(
+                fireHeldProperty.PropertyType,
+                Is.EqualTo(typeof(bool)));
+
+            ConstructorInfo constructor =
+                recordType.GetConstructor(
+                    new[]
+                    {
+                typeof(uint),
+                typeof(float),
+                typeof(float),
+                typeof(float),
+                typeof(float),
+                typeof(bool)
+                    });
+
+            Assert.That(
+                constructor,
+                Is.Not.Null,
+                "PlayerStateRecord must accept FireHeld.");
+        }
+
+        [Test]
+        public void PlayerInputPayloadExposesFireHeldFlag()
+        {
+            Type payloadType =
+                typeof(PlayerInputPayload);
+
+            PropertyInfo fireHeldProperty =
+                payloadType.GetProperty(
+                    "FireHeld");
+
+            Assert.That(
+                fireHeldProperty,
+                Is.Not.Null,
+                "PlayerInputPayload must expose FireHeld.");
+
+            Assert.That(
+                fireHeldProperty.PropertyType,
+                Is.EqualTo(typeof(bool)));
+
+            ConstructorInfo constructor =
+                payloadType.GetConstructor(
+                    new[]
+                    {
+                typeof(float),
+                typeof(float),
+                typeof(float),
+                typeof(float),
+                typeof(bool)
+                    });
+
+            Assert.That(
+                constructor,
+                Is.Not.Null,
+                "PlayerInputPayload must accept FireHeld.");
         }
 
         [TestCase(1.1f, 0.0f)]
@@ -95,13 +169,13 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
-        public void PlayerInputDecodeNonZeroReserved_RejectsPayload()
+        public void PlayerInputDecodeUnknownFlags_RejectsPayload()
         {
             var payload = new byte[20];
 
             payload[8] = 0x3F;
             payload[9] = 0x80;
-            payload[19] = 0x01;
+            payload[19] = 0x02;
 
             Assert.Throws<ArgumentException>(
                 () =>
@@ -285,7 +359,7 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
-        public void PlayerStateDecodeNonZeroReserved_RejectsPayload()
+        public void PlayerStateDecodeUnknownFlags_RejectsPayload()
         {
             var payload = new byte[28];
 
@@ -299,8 +373,8 @@ namespace TopDownRoguelike.Tests.EditMode
             payload[16] = 0x3F;
             payload[17] = 0x80;
 
-            // Reserved != 0
-            payload[27] = 1;
+            // Unknown flags: bit 1 is not defined
+            payload[27] = 2;
 
             Assert.Throws<ArgumentException>(
                 () =>

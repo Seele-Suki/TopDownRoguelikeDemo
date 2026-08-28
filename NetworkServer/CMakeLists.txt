@@ -38,6 +38,8 @@ add_executable(NetworkServer
     src/net/PlayerInputForwarder.cpp
     src/net/PlayerStateForwarder.h
     src/net/PlayerStateForwarder.cpp
+    src/net/PlayerShotEventForwarder.h
+    src/net/PlayerShotEventForwarder.cpp
 
     src/protocol/MessageType.h
     src/protocol/MessageHeader.h
@@ -58,6 +60,8 @@ add_executable(NetworkServer
     src/protocol/PlayerInputCodec.cpp
     src/protocol/PlayerStateSnapshotCodec.h
     src/protocol/PlayerStateSnapshotCodec.cpp
+    src/protocol/PlayerShotEventCodec.h
+    src/protocol/PlayerShotEventCodec.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -503,6 +507,8 @@ add_executable(ServerLoopTests
     src/net/PlayerInputForwarder.cpp
     src/net/PlayerStateForwarder.h
     src/net/PlayerStateForwarder.cpp
+    src/net/PlayerShotEventForwarder.h
+    src/net/PlayerShotEventForwarder.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -533,6 +539,8 @@ add_executable(ServerLoopTests
     src/protocol/PlayerInputCodec.cpp
     src/protocol/PlayerStateSnapshotCodec.h
     src/protocol/PlayerStateSnapshotCodec.cpp
+    src/protocol/PlayerShotEventCodec.h
+    src/protocol/PlayerShotEventCodec.cpp
 )
 
 target_include_directories(ServerLoopTests
@@ -795,6 +803,100 @@ endif()
 add_test(
     NAME PlayerSyncCodecTests
     COMMAND PlayerSyncCodecTests
+)
+
+add_executable(PlayerShotEventForwarderTests
+    tests/PlayerShotEventForwarderTests.cpp
+
+    src/net/PlayerShotEventForwarder.h
+    src/net/PlayerShotEventForwarder.cpp
+    src/net/ServerCoordinator.h
+    src/net/ServerCoordinator.cpp
+    src/net/TcpClientSession.h
+    src/net/TcpClientSession.cpp
+    src/net/TcpConnection.h
+    src/net/TcpConnection.cpp
+
+    src/room/ClientState.h
+    src/room/ClientState.cpp
+    src/room/Room.h
+    src/room/Room.cpp
+    src/room/RoomManager.h
+    src/room/RoomManager.cpp
+    src/room/PlayerIdAllocator.h
+    src/room/PlayerIdAllocator.cpp
+    src/room/SessionTokenGenerator.h
+    src/room/SessionTokenGenerator.cpp
+
+    src/protocol/PacketCodec.h
+    src/protocol/PacketCodec.cpp
+    src/protocol/MessageType.h
+    src/protocol/MessageHeader.h
+    src/protocol/NetworkByteOrder.h
+    src/protocol/UdpMessageHeader.h
+    src/protocol/UdpPacketCodec.h
+    src/protocol/UdpPacketCodec.cpp
+    src/protocol/SessionTokenCodec.h
+    src/protocol/SessionTokenCodec.cpp
+    src/protocol/PlayerShotEventCodec.h
+    src/protocol/PlayerShotEventCodec.cpp
+    src/protocol/RoomStateSnapshotCodec.h
+    src/protocol/RoomStateSnapshotCodec.cpp
+)
+
+target_include_directories(PlayerShotEventForwarderTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(PlayerShotEventForwarderTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(PlayerShotEventForwarderTests
+        PRIVATE
+            ws2_32
+            bcrypt
+    )
+endif()
+
+add_test(
+    NAME PlayerShotEventForwarderTests
+    COMMAND PlayerShotEventForwarderTests
+)
+
+add_executable(PlayerShotEventCodecTests
+    tests/PlayerShotEventCodecTests.cpp
+
+    src/protocol/PlayerShotEventCodec.h
+    src/protocol/PlayerShotEventCodec.cpp
+    src/protocol/NetworkByteOrder.h
+)
+
+target_include_directories(PlayerShotEventCodecTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(PlayerShotEventCodecTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(PlayerShotEventCodecTests
+        PRIVATE
+            ws2_32
+    )
+endif()
+
+add_test(
+    NAME PlayerShotEventCodecTests
+    COMMAND PlayerShotEventCodecTests
 )
 
 add_executable(PlayerInputForwarderTests

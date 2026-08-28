@@ -90,12 +90,16 @@ namespace TopDownRoguelike.Gameplay.Networking
             Vector2 aim =
                 inputSource.AimDirection;
 
+            bool fireHeld =
+                inputSource.IsFireHeld;
+
             sendInput(
                 new PlayerInputPayload(
                     movement.x,
                     movement.y,
                     aim.x,
-                    aim.y));
+                    aim.y,
+                    fireHeld));
         }
 
         private void OnDisable()

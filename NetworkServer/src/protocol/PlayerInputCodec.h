@@ -15,6 +15,7 @@ namespace tdr::protocol
         float moveY = 0.0F;
         float aimX = 0.0F;
         float aimY = 0.0F;
+        std::uint32_t flags = 0U;
     };
 
     class PlayerInputCodec final

@@ -7,5 +7,7 @@ namespace TopDownRoguelike.Gameplay.Characters
         Vector2 MoveDirection { get; }
 
         Vector2 AimDirection { get; }
+
+        bool IsFireHeld { get; }
     }
 }

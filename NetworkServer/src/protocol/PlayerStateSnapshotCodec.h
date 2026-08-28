@@ -22,6 +22,7 @@ namespace tdr::protocol
         float positionY = 0.0F;
         float aimX = 0.0F;
         float aimY = 0.0F;
+        std::uint32_t flags = 0U;
     };
 
     struct PlayerStateSnapshotPayload final

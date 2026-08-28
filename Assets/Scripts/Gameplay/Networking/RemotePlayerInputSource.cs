@@ -19,9 +19,26 @@ namespace TopDownRoguelike.Gameplay.Networking
             private set;
         }
 
+        public bool IsFireHeld
+        {
+            get;
+            private set;
+        }
+
         public void ApplyInput(
             Vector2 moveDirection,
             Vector2 aimDirection)
+        {
+            ApplyInputWithFireState(
+                moveDirection,
+                aimDirection,
+                false);
+        }
+
+        public void ApplyInputWithFireState(
+            Vector2 moveDirection,
+            Vector2 aimDirection,
+            bool fireHeld)
         {
             MoveDirection =
                 NormalizeIfNeeded(
@@ -30,6 +47,9 @@ namespace TopDownRoguelike.Gameplay.Networking
             AimDirection =
                 NormalizeIfNeeded(
                     aimDirection);
+
+            IsFireHeld =
+                fireHeld;
         }
 
         public void ClearInput()
@@ -39,6 +59,9 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             AimDirection =
                 Vector2.zero;
+
+            IsFireHeld =
+                false;
         }
 
         private static Vector2 NormalizeIfNeeded(

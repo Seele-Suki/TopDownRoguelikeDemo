@@ -5,6 +5,7 @@
 #include "net/UdpPingHandler.h"
 #include "net/PlayerInputForwarder.h"
 #include "net/PlayerStateForwarder.h"
+#include "net/PlayerShotEventForwarder.h"
 
 #include <chrono>
 #include <functional>
@@ -41,6 +42,7 @@ namespace tdr::net
         UdpPingHandler udpPingHandler_;
         PlayerStateForwarder playerStateForwarder_;
         PlayerInputForwarder playerInputForwarder_;
+        PlayerShotEventForwarder playerShotEventForwarder_;
         SelectLoop selectLoop_;
     };
 }

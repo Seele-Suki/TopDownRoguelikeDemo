@@ -63,7 +63,7 @@ namespace
             // Aim Y: -1.0F = 0xBF800000
             0xBFU, 0x80U, 0x00U, 0x00U,
 
-            // Reserved: must be zero
+            // Flags: FireHeld is not set
             0x00U, 0x00U, 0x00U, 0x00U
         };
 
@@ -211,20 +211,20 @@ namespace
             "Player input with trailing bytes was accepted."
         );
 
-        auto nonZeroReserved = encoded;
-        nonZeroReserved[19] = 1U;
+        auto unknownFlags = encoded;
+        unknownFlags[19] = 2U;
 
         RequireInvalidArgument(
-            [&nonZeroReserved]()
+            [&unknownFlags]()
             {
                 static_cast<void>(
                     PlayerInputCodec::Decode(
-                        nonZeroReserved.data(),
-                        nonZeroReserved.size()
+                        unknownFlags.data(),
+                        unknownFlags.size()
                     )
                     );
             },
-            "Non-zero reserved field was accepted."
+            "Unknown player input flags were accepted."
         );
 
         RequireInvalidArgument(
@@ -255,7 +255,8 @@ namespace
                 -3.5F,
                 4.25F,
                 -1.0F,
-                0.0F
+                0.0F,
+                0U
             }
         );
 
@@ -266,7 +267,8 @@ namespace
                 1.5F,
                 -2.25F,
                 0.0F,
-                1.0F
+                1.0F,
+                1U
             }
         );
 
@@ -284,8 +286,8 @@ namespace
             0x00U, 0x00U, 0x00U, 0x00U,
             // Aim Y: 1
             0x3FU, 0x80U, 0x00U, 0x00U,
-            // Reserved
-            0x00U, 0x00U, 0x00U, 0x00U,
+            // Flags: FireHeld
+            0x00U, 0x00U, 0x00U, 0x01U,
 
             // Player ID: 0x01020304
             0x01U, 0x02U, 0x03U, 0x04U,
@@ -297,7 +299,7 @@ namespace
             0xBFU, 0x80U, 0x00U, 0x00U,
             // Aim Y: 0
             0x00U, 0x00U, 0x00U, 0x00U,
-            // Reserved
+            // Flags: FireHeld is not set
             0x00U, 0x00U, 0x00U, 0x00U
         };
 
@@ -334,6 +336,11 @@ namespace
         );
 
         Require(
+            decoded.players[0].flags == 1U,
+            "Decoded first player FireHeld flag did not match."
+        );
+
+        Require(
             decoded.players[1].playerId == 0x01020304U,
             "Decoded second player ID did not match."
         );
@@ -344,6 +351,11 @@ namespace
             decoded.players[1].aimX == -1.0F &&
             decoded.players[1].aimY == 0.0F,
             "Decoded second player state did not match."
+        );
+
+        Require(
+            decoded.players[1].flags == 0U,
+            "Decoded second player FireHeld flag did not match."
         );
     }
 
@@ -393,20 +405,20 @@ namespace
             "State snapshot with trailing bytes was accepted."
         );
 
-        auto nonZeroReserved = encoded;
-        nonZeroReserved[27] = 1U;
+        auto unknownFlags = encoded;
+        unknownFlags[27] = 2U;
 
         RequireInvalidArgument(
-            [&nonZeroReserved]()
+            [&unknownFlags]()
             {
                 static_cast<void>(
                     PlayerStateSnapshotCodec::Decode(
-                        nonZeroReserved.data(),
-                        nonZeroReserved.size()
+                        unknownFlags.data(),
+                        unknownFlags.size()
                     )
-                    );
+                );
             },
-            "Non-zero snapshot reserved field was accepted."
+            "Unknown player state flags were accepted."
         );
 
         RequireInvalidArgument(

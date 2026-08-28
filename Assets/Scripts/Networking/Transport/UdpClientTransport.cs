@@ -301,7 +301,9 @@ namespace TopDownRoguelike.Networking.Transport
             if (header.Type ==
                 MessageType.PlayerInput ||
             header.Type ==
-                MessageType.PlayerStateSnapshot)
+                MessageType.PlayerStateSnapshot ||
+            header.Type ==
+                MessageType.PlayerShotEvent)
             {
                 return header.PlayerId != 0u &&
                     header.PlayerId != playerId;

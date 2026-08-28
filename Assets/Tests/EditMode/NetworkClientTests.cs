@@ -907,6 +907,39 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void SendPlayerShotEvent_WhenNotInRoom_RejectsSend()
+        {
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                var shotEvent =
+                    new PlayerShotEvent(
+                        7u,
+                        1u,
+                        0.0f,
+                        0.0f,
+                        1.0f,
+                        0.0f);
+
+                InvalidOperationException exception =
+                    Assert.Throws<InvalidOperationException>(
+                        () =>
+                            client.SendPlayerShotEvent(
+                                shotEvent));
+
+                Assert.That(
+                    exception.Message,
+                    Does.Contain("in a room"));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
         public void ForwardedPlayerInput_RaisesRemoteInputEvent()
         {
             var client =
@@ -1075,6 +1108,93 @@ namespace TopDownRoguelike.Tests.EditMode
                 Assert.That(
                     receivedSnapshot.Players[1].AimY,
                     Is.EqualTo(1f));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
+        public void ForwardedPlayerShotEvent_RaisesDecodedShotEvent()
+        {
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                uint receivedPlayerId =
+                    0u;
+
+                PlayerShotEvent receivedShotEvent =
+                    null;
+
+                client.PlayerShotEventReceived +=
+                    (playerId, shotEvent) =>
+                    {
+                        receivedPlayerId =
+                            playerId;
+
+                        receivedShotEvent =
+                            shotEvent;
+                    };
+
+                SetClientState(
+                    client,
+                    NetworkClientState.InRoom);
+
+                var expectedShotEvent =
+                    new PlayerShotEvent(
+                        9u,
+                        17u,
+                        3.0f,
+                        -2.0f,
+                        0.6f,
+                        0.8f);
+
+                byte[] payload =
+                    PlayerShotEventCodec.Encode(
+                        expectedShotEvent);
+
+                DispatchTransportEvent(
+                    client,
+                    NetworkTransportEvent.UdpPacketReceived(
+                        MessageType.PlayerShotEvent,
+                        9u,
+                        21u,
+                        payload));
+
+                Assert.That(
+                    receivedPlayerId,
+                    Is.EqualTo(9u));
+
+                Assert.That(
+                    receivedShotEvent,
+                    Is.Not.Null);
+
+                Assert.That(
+                    receivedShotEvent.PlayerId,
+                    Is.EqualTo(9u));
+
+                Assert.That(
+                    receivedShotEvent.ShotSequence,
+                    Is.EqualTo(17u));
+
+                Assert.That(
+                    receivedShotEvent.OriginX,
+                    Is.EqualTo(3.0f));
+
+                Assert.That(
+                    receivedShotEvent.OriginY,
+                    Is.EqualTo(-2.0f));
+
+                Assert.That(
+                    receivedShotEvent.DirectionX,
+                    Is.EqualTo(0.6f));
+
+                Assert.That(
+                    receivedShotEvent.DirectionY,
+                    Is.EqualTo(0.8f));
             }
             finally
             {

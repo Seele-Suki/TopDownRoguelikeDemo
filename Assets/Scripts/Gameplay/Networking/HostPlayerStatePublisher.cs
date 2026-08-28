@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using TopDownRoguelike.Gameplay.Characters;
 using TopDownRoguelike.Networking.Gameplay;
 using TopDownRoguelike.Networking.Protocol;
+using TopDownRoguelike.Gameplay.Characters;
 using UnityEngine;
 
 namespace TopDownRoguelike.Gameplay.Networking
@@ -97,13 +99,19 @@ namespace TopDownRoguelike.Gameplay.Networking
                 Vector2 aim =
                     controller.AimDirection;
 
+                bool fireHeld =
+                    player.TryGetComponent(
+                        out IPlayerInputSource inputSource) &&
+                    inputSource.IsFireHeld;
+
                 playerStates.Add(
                     new PlayerStateRecord(
                         playerId,
                         position.x,
                         position.y,
                         aim.x,
-                        aim.y));
+                        aim.y,
+                        fireHeld));
             }
 
             elapsedSeconds %=

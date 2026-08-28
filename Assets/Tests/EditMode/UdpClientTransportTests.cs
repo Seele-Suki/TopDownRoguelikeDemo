@@ -367,6 +367,106 @@ namespace TopDownRoguelike.Tests.EditMode
             }
         }
 
+        [Test]
+        public void ReceivedForwardedPlayerShotEvent_AllowsRemotePlayerId()
+        {
+            UdpClient server =
+                CreateServer(out int port);
+
+            var queue =
+                new MainThreadMessageQueue<
+                    NetworkTransportEvent>();
+
+            var transport =
+                new UdpClientTransport(queue);
+
+            byte[] clientToken =
+                CreateToken();
+
+            try
+            {
+                transport.Start(
+                    "::1",
+                    port,
+                    7u,
+                    clientToken);
+
+                WaitForEvent(
+                    queue,
+                    NetworkTransportEventType.Connected);
+
+                transport.Send(
+                    MessageType.UdpPing,
+                    1u,
+                    Array.Empty<byte>());
+
+                var clientEndpoint =
+                    new IPEndPoint(
+                        IPAddress.IPv6Any,
+                        0);
+
+                server.Receive(
+                    ref clientEndpoint);
+
+                var shotEvent =
+                    new PlayerShotEvent(
+                        9u,
+                        17u,
+                        3.0f,
+                        -2.0f,
+                        0.6f,
+                        0.8f);
+
+                byte[] payload =
+                    PlayerShotEventCodec.Encode(
+                        shotEvent);
+
+                var forwardedHeader =
+                    new UdpMessageHeader(
+                        MessageType.PlayerShotEvent,
+                        clientToken,
+                        9u,
+                        21u);
+
+                byte[] datagram =
+                    UdpPacketCodec.Encode(
+                        forwardedHeader,
+                        payload);
+
+                server.Send(
+                    datagram,
+                    datagram.Length,
+                    clientEndpoint);
+
+                NetworkTransportEvent transportEvent =
+                    WaitForEvent(
+                        queue,
+                        NetworkTransportEventType.PacketReceived);
+
+                Assert.That(
+                    transportEvent.PacketType,
+                    Is.EqualTo(
+                        MessageType.PlayerShotEvent));
+
+                Assert.That(
+                    transportEvent.PlayerId,
+                    Is.EqualTo(9u));
+
+                Assert.That(
+                    transportEvent.Sequence,
+                    Is.EqualTo(21u));
+
+                Assert.That(
+                    transportEvent.Payload,
+                    Is.EqualTo(payload));
+            }
+            finally
+            {
+                transport.Stop();
+                server.Close();
+            }
+        }
+
         private static UdpClient CreateServer(
             out int port)
         {

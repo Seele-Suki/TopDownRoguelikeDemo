@@ -20,6 +20,9 @@ namespace TopDownRoguelike.Gameplay.Networking
         private GameObject playerPrefab;
 
         [SerializeField]
+        private GameObject remoteProjectileVisualPrefab;
+
+        [SerializeField]
         private GameObject scenePlayer;
 
         [SerializeField]
@@ -40,6 +43,7 @@ namespace TopDownRoguelike.Gameplay.Networking
         private GameObject remotePlayer;
         private NetworkClient remoteInputClient;
         private NetworkClient stateSnapshotClient;
+        private NetworkClient shotEventClient;
 
         public NetworkPlayerRegistry Registry =>
             registry;
@@ -174,6 +178,17 @@ namespace TopDownRoguelike.Gameplay.Networking
                         "The host state publisher " +
                         "could not be configured.");
                 }
+
+                if (enabled &&
+                    !TryConfigureHostShotPublisher(
+                        localPlayerId,
+                        networkBehaviour.Client
+                            .SendPlayerShotEvent))
+                {
+                    FailConfiguration(
+                        "The host shot publisher " +
+                        "could not be configured.");
+                }
             }
         }
 
@@ -223,6 +238,9 @@ namespace TopDownRoguelike.Gameplay.Networking
             if (enabled)
             {
                 SubscribeToRemoteStateSnapshots(
+                    networkBehaviour.Client);
+
+                SubscribeToRemoteShotEvents(
                     networkBehaviour.Client);
             }
 
@@ -399,6 +417,66 @@ namespace TopDownRoguelike.Gameplay.Networking
                 return;
             }
 
+            if (!TryConfigureRemoteShotReceiver(
+                createdRemotePlayer,
+                hostPlayerId))
+            {
+                registry.Remove(
+                    localPlayerId);
+
+                registry.Remove(
+                    hostPlayerId);
+
+                DestroyPlayer(
+                    createdRemotePlayer);
+
+                FailConfiguration(
+                    "The remote shot receiver could not " +
+                    "be configured.");
+
+                return;
+            }
+
+            if (remoteProjectileVisualPrefab == null)
+            {
+                if (Application.isPlaying)
+                {
+                    registry.Remove(
+                        localPlayerId);
+
+                    registry.Remove(
+                        hostPlayerId);
+
+                    DestroyPlayer(
+                        createdRemotePlayer);
+
+                    FailConfiguration(
+                        "The remote projectile visual prefab " +
+                        "is not assigned.");
+
+                    return;
+                }
+            }
+            else if (!TryConfigureRemoteShotSpawner(
+                         createdRemotePlayer,
+                         remoteProjectileVisualPrefab))
+            {
+                registry.Remove(
+                    localPlayerId);
+
+                registry.Remove(
+                    hostPlayerId);
+
+                DestroyPlayer(
+                    createdRemotePlayer);
+
+                FailConfiguration(
+                    "The remote projectile visual spawner " +
+                    "could not be configured.");
+
+                return;
+            }
+
             localPlayer = scenePlayer;
             remotePlayer = createdRemotePlayer;
         }
@@ -554,6 +632,30 @@ namespace TopDownRoguelike.Gameplay.Networking
                 HandleRemotePlayerStateSnapshot;
         }
 
+        private void SubscribeToRemoteShotEvents(
+            NetworkClient client)
+        {
+            if (client == null ||
+                shotEventClient == client)
+            {
+                return;
+            }
+
+            if (shotEventClient != null)
+            {
+                shotEventClient
+                    .PlayerShotEventReceived -=
+                    HandleRemotePlayerShotEvent;
+            }
+
+            shotEventClient =
+                client;
+
+            shotEventClient
+                .PlayerShotEventReceived +=
+                HandleRemotePlayerShotEvent;
+        }
+
         private void SubscribeToRemoteInput(
             NetworkClient client)
         {
@@ -606,13 +708,14 @@ namespace TopDownRoguelike.Gameplay.Networking
                 return;
             }
 
-            inputSource.ApplyInput(
+            inputSource.ApplyInputWithFireState(
                 new Vector2(
                     input.MoveX,
                     input.MoveY),
                 new Vector2(
                     input.AimX,
-                    input.AimY));
+                    input.AimY),
+                input.FireHeld);
         }
 
         private void HandleRemotePlayerStateSnapshot(
@@ -638,6 +741,45 @@ namespace TopDownRoguelike.Gameplay.Networking
                 snapshot);
         }
 
+        private void HandleRemotePlayerShotEvent(
+            uint playerId,
+            PlayerShotEvent shotEvent)
+        {
+            Debug.Log(
+                $"NetworkGameBootstrap: received remote shot " +
+                $"player={playerId}, " +
+                $"sequence={shotEvent?.ShotSequence}",
+                this);
+
+            if (playerId == 0u ||
+                shotEvent == null ||
+                registry == null ||
+                !registry.TryGetPlayer(
+                    playerId,
+                    out GameObject player) ||
+                player == null ||
+                player == localPlayer)
+            {
+                return;
+            }
+
+            if (!player.TryGetComponent(
+                    out RemotePlayerShotEventReceiver receiver))
+            {
+                Debug.LogError(
+                    "NetworkGameBootstrap: Registered " +
+                    "remote player has no " +
+                    "RemotePlayerShotEventReceiver.",
+                    this);
+
+                return;
+            }
+
+            receiver.Enqueue(
+                playerId,
+                shotEvent);
+        }
+
         private static bool TryConfigureRemoteInterpolator(
             GameObject player,
             uint remotePlayerId)
@@ -661,6 +803,70 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             interpolator.Configure(
                 remotePlayerId);
+
+            return true;
+        }
+
+        private static bool TryConfigureRemoteShotReceiver(
+            GameObject player,
+            uint remotePlayerId)
+        {
+            if (player == null ||
+                remotePlayerId == 0u)
+            {
+                return false;
+            }
+
+            RemotePlayerShotEventReceiver receiver =
+                player.GetComponent<
+                    RemotePlayerShotEventReceiver>();
+
+            if (receiver == null)
+            {
+                receiver =
+                    player.AddComponent<
+                        RemotePlayerShotEventReceiver>();
+            }
+
+            receiver.Configure(
+                remotePlayerId);
+
+            return true;
+        }
+
+        private static bool TryConfigureRemoteShotSpawner(
+            GameObject player,
+            GameObject visualPrefab)
+        {
+            if (player == null ||
+                visualPrefab == null)
+            {
+                return false;
+            }
+
+            RemotePlayerShotEventReceiver receiver =
+                player.GetComponent<
+                    RemotePlayerShotEventReceiver>();
+
+            if (receiver == null)
+            {
+                return false;
+            }
+
+            RemoteProjectileVisualSpawner spawner =
+                player.GetComponent<
+                    RemoteProjectileVisualSpawner>();
+
+            if (spawner == null)
+            {
+                spawner =
+                    player.AddComponent<
+                        RemoteProjectileVisualSpawner>();
+            }
+
+            spawner.Configure(
+                receiver,
+                visualPrefab);
 
             return true;
         }
@@ -699,6 +905,52 @@ namespace TopDownRoguelike.Gameplay.Networking
             remotePlayerId
                 },
                 sendSnapshot);
+
+            return true;
+        }
+
+        private bool TryConfigureHostShotPublisher(
+            uint localPlayerId,
+            Action<PlayerShotEvent>
+                sendShotEvent)
+        {
+            if (!GameSession.IsHost ||
+                localPlayer == null ||
+                localPlayerId == 0u ||
+                sendShotEvent == null)
+            {
+                return false;
+            }
+
+            PlayerShooterShotEventSource
+                shotEventSource =
+                localPlayer.GetComponent<
+                    PlayerShooterShotEventSource>();
+
+            if (shotEventSource == null)
+            {
+                shotEventSource =
+                    localPlayer.AddComponent<
+                        PlayerShooterShotEventSource>();
+            }
+
+            shotEventSource.Configure(
+                localPlayerId);
+
+            HostPlayerShotPublisher publisher =
+                GetComponent<
+                    HostPlayerShotPublisher>();
+
+            if (publisher == null)
+            {
+                publisher =
+                    gameObject.AddComponent<
+                        HostPlayerShotPublisher>();
+            }
+
+            publisher.Configure(
+                shotEventSource,
+                sendShotEvent);
 
             return true;
         }
@@ -773,12 +1025,17 @@ namespace TopDownRoguelike.Gameplay.Networking
             }
 
             if (!player.TryGetComponent(
-                    out PlayerController controller))
+                out PlayerController controller) ||
+            !player.TryGetComponent(
+                out PlayerShooter shooter))
             {
                 return false;
             }
 
             controller.SetInputSource(
+                inputSource);
+
+            shooter.SetInputSource(
                 inputSource);
 
             return true;
@@ -860,6 +1117,16 @@ namespace TopDownRoguelike.Gameplay.Networking
                     HandleRemotePlayerStateSnapshot;
 
                 stateSnapshotClient =
+                    null;
+            }
+
+            if (shotEventClient != null)
+            {
+                shotEventClient
+                    .PlayerShotEventReceived -=
+                    HandleRemotePlayerShotEvent;
+
+                shotEventClient =
                     null;
             }
 

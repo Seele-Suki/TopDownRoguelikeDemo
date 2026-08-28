@@ -10,13 +10,15 @@ namespace TopDownRoguelike.Networking.Protocol
             float positionX,
             float positionY,
             float aimX,
-            float aimY)
+            float aimY,
+            bool fireHeld = false)
         {
             PlayerId = playerId;
             PositionX = positionX;
             PositionY = positionY;
             AimX = aimX;
             AimY = aimY;
+            FireHeld = fireHeld;
         }
 
         public uint PlayerId { get; }
@@ -24,6 +26,7 @@ namespace TopDownRoguelike.Networking.Protocol
         public float PositionY { get; }
         public float AimX { get; }
         public float AimY { get; }
+        public bool FireHeld { get; }
     }
 
     public sealed class PlayerStateSnapshotPayload
@@ -61,6 +64,10 @@ namespace TopDownRoguelike.Networking.Protocol
         public const int PrefixSize = 4;
         public const int RecordSize = 24;
         public const int MaxPlayerCount = 4;
+
+        private const int FlagsOffset = 20;
+        private const uint FireHeldFlag = 1u;
+        private const uint KnownFlags = FireHeldFlag;
 
         public static byte[] Encode(
             PlayerStateSnapshotPayload snapshot)
@@ -134,10 +141,15 @@ namespace TopDownRoguelike.Networking.Protocol
                     offset + 16,
                     player.AimY);
 
+                uint flags =
+                    player.FireHeld
+                        ? FireHeldFlag
+                        : 0u;
+
                 PacketCodec.WriteNetworkUInt32(
                     payload,
-                    offset + 20,
-                    0u);
+                    offset + FlagsOffset,
+                    flags);
 
                 offset += RecordSize;
             }
@@ -223,17 +235,20 @@ namespace TopDownRoguelike.Networking.Protocol
                         payload,
                         offset + 16);
 
-                uint reserved =
+                uint flags =
                     PacketCodec.ReadNetworkUInt32(
                         payload,
-                        offset + 20);
+                        offset + FlagsOffset);
 
-                if (reserved != 0u)
+                if ((flags & ~KnownFlags) != 0u)
                 {
                     throw new ArgumentException(
-                        "Player state reserved field must be zero.",
+                        "Player state contains unknown flags.",
                         nameof(payload));
                 }
+
+                bool fireHeld =
+                    (flags & FireHeldFlag) != 0u;
 
                 players.Add(
                     new PlayerStateRecord(
@@ -241,7 +256,9 @@ namespace TopDownRoguelike.Networking.Protocol
                         positionX,
                         positionY,
                         aimX,
-                        aimY));
+                        aimY,
+                        fireHeld)
+                );
 
                 offset += RecordSize;
             }

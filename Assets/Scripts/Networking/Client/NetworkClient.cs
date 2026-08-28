@@ -99,6 +99,11 @@ namespace TopDownRoguelike.Networking.Client
             PlayerStateSnapshotPayload>
             PlayerStateSnapshotReceived;
 
+        public event Action<
+            uint,
+            PlayerShotEvent>
+            PlayerShotEventReceived;
+
         public NetworkClientState State
         {
             get;
@@ -515,6 +520,44 @@ namespace TopDownRoguelike.Networking.Client
             }
         }
 
+        public void SendPlayerShotEvent(
+            PlayerShotEvent shotEvent)
+        {
+            ThrowIfDisposed();
+
+            if (State !=
+                NetworkClientState.InRoom)
+            {
+                throw new InvalidOperationException(
+                    "Network client must be in a room " +
+                    "before sending player shot event.");
+            }
+
+            byte[] payload =
+                PlayerShotEventCodec.Encode(
+                    shotEvent);
+
+            uint sequence =
+                nextUdpSequence;
+
+            nextUdpSequence =
+                unchecked(
+                    nextUdpSequence + 1u);
+
+            try
+            {
+                udpTransport.Send(
+                    MessageType.PlayerShotEvent,
+                    sequence,
+                    payload);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
         public int Tick()
         {
             ThrowIfDisposed();
@@ -761,6 +804,20 @@ namespace TopDownRoguelike.Networking.Client
             if (transportEvent.TransportKind ==
                 NetworkTransportKind.Udp &&
                 transportEvent.PacketType ==
+                MessageType.PlayerShotEvent &&
+                State ==
+                    NetworkClientState.InRoom)
+            {
+                HandlePlayerShotEvent(
+                    transportEvent.PlayerId,
+                    transportEvent.Payload);
+
+                return;
+            }
+
+            if (transportEvent.TransportKind ==
+                NetworkTransportKind.Udp &&
+                transportEvent.PacketType ==
                 MessageType.UdpBindAccepted &&
                 State ==
                 NetworkClientState.BindingUdp)
@@ -991,6 +1048,48 @@ namespace TopDownRoguelike.Networking.Client
                 PlayerStateSnapshotReceived?.Invoke(
                     senderPlayerId,
                     snapshot);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
+        private void HandlePlayerShotEvent(
+            uint senderPlayerId,
+            byte[] payload)
+        {
+            try
+            {
+                if (senderPlayerId == 0u)
+                {
+                    throw new InvalidOperationException(
+                        "Player shot event contains " +
+                        "an invalid sender ID.");
+                }
+
+                if (senderPlayerId ==
+                    PlayerId)
+                {
+                    return;
+                }
+
+                PlayerShotEvent shotEvent =
+                    PlayerShotEventCodec.Decode(
+                        payload);
+
+                if (shotEvent.PlayerId !=
+                    senderPlayerId)
+                {
+                    throw new InvalidOperationException(
+                        "Player shot event ID does not " +
+                        "match the UDP sender ID.");
+                }
+
+                PlayerShotEventReceived?.Invoke(
+                    senderPlayerId,
+                    shotEvent);
             }
             catch (Exception exception)
             {

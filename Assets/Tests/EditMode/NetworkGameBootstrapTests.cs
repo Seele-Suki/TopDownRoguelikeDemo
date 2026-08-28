@@ -318,6 +318,11 @@ namespace TopDownRoguelike.Tests.EditMode
             Type playerControllerType =
                 FindType("PlayerController");
 
+            Type playerShooterType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Weapons." +
+                    "PlayerShooter");
+
             Assert.That(
                 localInputSourceType,
                 Is.Not.Null);
@@ -328,6 +333,10 @@ namespace TopDownRoguelike.Tests.EditMode
 
             Assert.That(
                 playerControllerType,
+                Is.Not.Null);
+
+            Assert.That(
+                playerShooterType,
                 Is.Not.Null);
 
             Assert.That(bootstrapType, Is.Not.Null);
@@ -350,6 +359,9 @@ namespace TopDownRoguelike.Tests.EditMode
             scenePlayer.AddComponent(
                 playerControllerType);
 
+            scenePlayer.AddComponent(
+                playerShooterType);
+    
             var hostSpawnObject =
                 new GameObject("Host Spawn Point");
 
@@ -468,6 +480,11 @@ namespace TopDownRoguelike.Tests.EditMode
                         playerControllerType)
                     as Behaviour;
 
+                Behaviour remoteShooter =
+                    remotePlayer.GetComponent(
+                        playerShooterType)
+                    as Behaviour;
+
                 Assert.That(
                     remoteInput,
                     Is.Not.Null);
@@ -479,6 +496,33 @@ namespace TopDownRoguelike.Tests.EditMode
                 Assert.That(
                     remoteController.enabled,
                     Is.True);
+
+                Assert.That(
+                    remoteShooter,
+                    Is.Not.Null);
+
+                Assert.That(
+                    remoteShooter.enabled,
+                    Is.True,
+                    "The host must enable authoritative shooting " +
+                    "for the remote client player.");
+
+                FieldInfo shooterInputSourceField =
+                    playerShooterType.GetField(
+                        "inputSource",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    shooterInputSourceField,
+                    Is.Not.Null);
+
+                Assert.That(
+                    shooterInputSourceField.GetValue(
+                        remoteShooter),
+                    Is.SameAs(remoteInput),
+                    "The remote shooter must use " +
+                    "RemotePlayerInputSource.");
 
                 var input =
                     new PlayerInputPayload(

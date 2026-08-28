@@ -6255,6 +6255,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerPrefab: {fileID: 8256583254869339597, guid: 624ef4bc053045d4b9239d81c6e47397, type: 3}
+  remoteProjectileVisualPrefab: {fileID: 1720775461612836037, guid: eae91ad04460f0f4d814b4231553141b, type: 3}
   scenePlayer: {fileID: 2787553450771647587}
   hostSpawnPoint: {fileID: 901543341}
   clientSpawnPoint: {fileID: 974414194}

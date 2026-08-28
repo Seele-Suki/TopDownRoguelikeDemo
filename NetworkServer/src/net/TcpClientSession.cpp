@@ -191,6 +191,20 @@ namespace tdr::net
             && udpEndpoint_->Matches(address);
     }
 
+    const sockaddr_in6&
+        TcpClientSession::UdpEndpointAddress() const
+    {
+        if (!udpEndpoint_.has_value())
+        {
+            throw std::runtime_error(
+                "TCP client session has no "
+                "bound UDP endpoint."
+            );
+        }
+
+        return udpEndpoint_->Address();
+    }
+
     const std::array<
         std::uint8_t,
         tdr::protocol::kUdpSessionTokenSize
@@ -214,6 +228,24 @@ namespace tdr::net
     ) noexcept
     {
         return udpSequenceTracker_.Accept(
+            sequence
+        );
+    }
+
+    bool TcpClientSession::AcceptPlayerInputSequence(
+        const std::uint32_t sequence
+    ) noexcept
+    {
+        return playerInputSequenceTracker_.Accept(
+            sequence
+        );
+    }
+
+    bool TcpClientSession::AcceptPlayerStateSequence(
+        const std::uint32_t sequence
+    ) noexcept
+    {
+        return playerStateSequenceTracker_.Accept(
             sequence
         );
     }

@@ -83,6 +83,7 @@ namespace TopDownRoguelike.Tests.EditMode
             NetworkTransportEvent transportEvent =
                 NetworkTransportEvent.UdpPacketReceived(
                     MessageType.UdpPong,
+                    7u,
                     42u,
                     payload);
 
@@ -98,6 +99,10 @@ namespace TopDownRoguelike.Tests.EditMode
             Assert.That(
                 transportEvent.PacketType,
                 Is.EqualTo(MessageType.UdpPong));
+
+            Assert.That(
+                transportEvent.PlayerId,
+                Is.EqualTo(7u));
 
             Assert.That(
                 transportEvent.Sequence,

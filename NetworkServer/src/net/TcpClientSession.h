@@ -80,6 +80,9 @@ namespace tdr::net
         ) const noexcept;
 
         [[nodiscard]]
+        const sockaddr_in6& UdpEndpointAddress() const;
+
+        [[nodiscard]]
         const std::array<
             std::uint8_t,
             tdr::protocol::kUdpSessionTokenSize
@@ -95,6 +98,16 @@ namespace tdr::net
 
         [[nodiscard]]
         bool AcceptUdpSequence(
+            std::uint32_t sequence
+        ) noexcept;
+
+        [[nodiscard]]
+        bool AcceptPlayerInputSequence(
+            std::uint32_t sequence
+        ) noexcept;
+
+        [[nodiscard]]
+        bool AcceptPlayerStateSequence(
             std::uint32_t sequence
         ) noexcept;
 
@@ -128,6 +141,12 @@ namespace tdr::net
         std::optional<UdpEndpoint> udpEndpoint_;
         tdr::protocol::UdpSequenceTracker
             udpSequenceTracker_;
+
+        tdr::protocol::UdpSequenceTracker
+            playerInputSequenceTracker_;
+
+        tdr::protocol::UdpSequenceTracker
+            playerStateSequenceTracker_;
 
         std::vector<std::vector<std::uint8_t>>
             outgoingPackets_;

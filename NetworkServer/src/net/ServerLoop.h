@@ -3,6 +3,8 @@
 #include "net/SelectLoop.h"
 #include "net/UdpBindHandler.h"
 #include "net/UdpPingHandler.h"
+#include "net/PlayerInputForwarder.h"
+#include "net/PlayerStateForwarder.h"
 
 #include <chrono>
 #include <functional>
@@ -37,6 +39,8 @@ namespace tdr::net
         ServerCoordinator& coordinator_;
         UdpBindHandler udpBindHandler_;
         UdpPingHandler udpPingHandler_;
+        PlayerStateForwarder playerStateForwarder_;
+        PlayerInputForwarder playerInputForwarder_;
         SelectLoop selectLoop_;
     };
 }

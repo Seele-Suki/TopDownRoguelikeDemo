@@ -1,3 +1,4 @@
+using System;
 using TopDownRoguelike.Gameplay.Characters;
 using TopDownRoguelike.Gameplay.Weapons;
 using TopDownRoguelike.Gameplay.UI;
@@ -37,6 +38,8 @@ namespace TopDownRoguelike.Gameplay.Networking
         private NetworkPlayerRegistry registry;
         private GameObject localPlayer;
         private GameObject remotePlayer;
+        private NetworkClient remoteInputClient;
+        private NetworkClient stateSnapshotClient;
 
         public NetworkPlayerRegistry Registry =>
             registry;
@@ -46,6 +49,11 @@ namespace TopDownRoguelike.Gameplay.Networking
 
         public GameObject RemotePlayer =>
             remotePlayer;
+
+        public event Action<
+            uint,
+            PlayerStateSnapshotPayload>
+            PlayerStateSnapshotReceived;
 
         private void Awake()
         {
@@ -150,12 +158,37 @@ namespace TopDownRoguelike.Gameplay.Networking
             ConfigureHostPlayers(
                 localPlayerId,
                 remotePlayerId);
+
+            if (enabled)
+            {
+                SubscribeToRemoteInput(
+                    networkBehaviour.Client);
+
+                if (!TryConfigureHostStatePublisher(
+                        localPlayerId,
+                        remotePlayerId,
+                        networkBehaviour.Client
+                            .SendPlayerStateSnapshot))
+                {
+                    FailConfiguration(
+                        "The host state publisher " +
+                        "could not be configured.");
+                }
+            }
         }
 
         private void ConfigureMultiplayerClient()
         {
             NetworkClientBehaviour networkBehaviour =
                 NetworkClientBehaviour.Instance;
+
+            Debug.Log(
+                $"NetworkGameBootstrap client setup: " +
+                $"Instance={(networkBehaviour != null)}, " +
+                $"State={networkBehaviour?.Client?.State}, " +
+                $"PlayerId={networkBehaviour?.Client?.PlayerId}, " +
+                $"RoomId={networkBehaviour?.Client?.CurrentRoomId}",
+                this);
 
             if (networkBehaviour == null ||
                 networkBehaviour.Client == null)
@@ -186,6 +219,25 @@ namespace TopDownRoguelike.Gameplay.Networking
             ConfigureClientPlayers(
                 localPlayerId,
                 hostPlayerId);
+
+            if (enabled)
+            {
+                SubscribeToRemoteStateSnapshots(
+                    networkBehaviour.Client);
+            }
+
+            if (enabled &&
+                !TryConfigureClientInputPublisherWithStateGuard(
+                    localPlayer,
+                    networkBehaviour.Client
+                        .SendPlayerInput,
+                    () => networkBehaviour.Client.State ==
+                        NetworkClientState.InRoom))
+            {
+                FailConfiguration(
+                    "The client input publisher " +
+                    "could not be configured.");
+            }
         }
 
         private void ConfigureHostPlayers(
@@ -233,6 +285,19 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             DisableLocalControl(
                 createdRemotePlayer);
+            
+            if (!TryEnableRemoteSimulation(
+                createdRemotePlayer))
+            {
+                DestroyPlayer(
+                    createdRemotePlayer);
+
+                FailConfiguration(
+                    "The remote player cannot be " +
+                    "configured for host simulation.");
+
+                return;
+            }
 
             if (!registry.TryRegister(
                     localPlayerId,
@@ -310,6 +375,26 @@ namespace TopDownRoguelike.Gameplay.Networking
 
                 FailConfiguration(
                     "Failed to register client players.");
+
+                return;
+            }
+
+            if (!TryConfigureRemoteInterpolator(
+                createdRemotePlayer,
+                hostPlayerId))
+            {
+                registry.Remove(
+                    localPlayerId);
+
+                registry.Remove(
+                    hostPlayerId);
+
+                DestroyPlayer(
+                    createdRemotePlayer);
+
+                FailConfiguration(
+                    "The remote player interpolator " +
+                    "could not be configured.");
 
                 return;
             }
@@ -445,6 +530,260 @@ namespace TopDownRoguelike.Gameplay.Networking
                 playerHealth);
         }
 
+        private void SubscribeToRemoteStateSnapshots(
+            NetworkClient client)
+        {
+            if (client == null ||
+                stateSnapshotClient == client)
+            {
+                return;
+            }
+
+            if (stateSnapshotClient != null)
+            {
+                stateSnapshotClient
+                    .PlayerStateSnapshotReceived -=
+                    HandleRemotePlayerStateSnapshot;
+            }
+
+            stateSnapshotClient =
+                client;
+
+            stateSnapshotClient
+                .PlayerStateSnapshotReceived +=
+                HandleRemotePlayerStateSnapshot;
+        }
+
+        private void SubscribeToRemoteInput(
+            NetworkClient client)
+        {
+            if (client == null ||
+                remoteInputClient == client)
+            {
+                return;
+            }
+
+            if (remoteInputClient != null)
+            {
+                remoteInputClient
+                    .RemotePlayerInputReceived -=
+                    HandleRemotePlayerInput;
+            }
+
+            remoteInputClient =
+                client;
+
+            remoteInputClient
+                .RemotePlayerInputReceived +=
+                HandleRemotePlayerInput;
+        }
+
+        private void HandleRemotePlayerInput(
+            uint playerId,
+            PlayerInputPayload input)
+        {
+            if (input == null ||
+                registry == null ||
+                !registry.TryGetPlayer(
+                    playerId,
+                    out GameObject player) ||
+                player == null ||
+                player == localPlayer)
+            {
+                return;
+            }
+
+            if (!player.TryGetComponent(
+                    out RemotePlayerInputSource
+                        inputSource))
+            {
+                Debug.LogError(
+                    "NetworkGameBootstrap: Registered " +
+                    "remote player has no " +
+                    "RemotePlayerInputSource.",
+                    this);
+
+                return;
+            }
+
+            inputSource.ApplyInput(
+                new Vector2(
+                    input.MoveX,
+                    input.MoveY),
+                new Vector2(
+                    input.AimX,
+                    input.AimY));
+        }
+
+        private void HandleRemotePlayerStateSnapshot(
+            uint senderPlayerId,
+            PlayerStateSnapshotPayload snapshot)
+        {
+            if (senderPlayerId == 0u ||
+                snapshot == null)
+            {
+                return;
+            }
+
+            if (remotePlayer != null &&
+                remotePlayer.TryGetComponent(
+                    out RemotePlayerInterpolator interpolator))
+            {
+                interpolator.ApplySnapshot(
+                    snapshot);
+            }
+
+            PlayerStateSnapshotReceived?.Invoke(
+                senderPlayerId,
+                snapshot);
+        }
+
+        private static bool TryConfigureRemoteInterpolator(
+            GameObject player,
+            uint remotePlayerId)
+        {
+            if (player == null ||
+                remotePlayerId == 0u)
+            {
+                return false;
+            }
+
+            RemotePlayerInterpolator interpolator =
+                player.GetComponent<
+                    RemotePlayerInterpolator>();
+
+            if (interpolator == null)
+            {
+                interpolator =
+                    player.AddComponent<
+                        RemotePlayerInterpolator>();
+            }
+
+            interpolator.Configure(
+                remotePlayerId);
+
+            return true;
+        }
+
+        private bool TryConfigureHostStatePublisher(
+            uint localPlayerId,
+            uint remotePlayerId,
+            Action<PlayerStateSnapshotPayload>
+                sendSnapshot)
+        {
+            if (!GameSession.IsHost ||
+                registry == null ||
+                localPlayerId == 0u ||
+                remotePlayerId == 0u ||
+                localPlayerId == remotePlayerId ||
+                sendSnapshot == null)
+            {
+                return false;
+            }
+
+            HostPlayerStatePublisher publisher =
+                GetComponent<HostPlayerStatePublisher>();
+
+            if (publisher == null)
+            {
+                publisher =
+                    gameObject.AddComponent<
+                        HostPlayerStatePublisher>();
+            }
+
+            publisher.Configure(
+                registry,
+                new uint[]
+                {
+            localPlayerId,
+            remotePlayerId
+                },
+                sendSnapshot);
+
+            return true;
+        }
+
+        private static bool
+            TryConfigureClientInputPublisher(
+                GameObject player,
+                Action<PlayerInputPayload> sendInput)
+        {
+            return TryConfigureClientInputPublisherWithStateGuard(
+                player,
+                sendInput,
+                () => true);
+        }
+
+        private static bool
+            TryConfigureClientInputPublisherWithStateGuard(
+                GameObject player,
+                Action<PlayerInputPayload> sendInput,
+                Func<bool> canSendInput)
+        {
+            if (player == null ||
+                sendInput == null ||
+                canSendInput == null)
+            {
+                return false;
+            }
+
+            if (!player.TryGetComponent(
+                    out LocalPlayerInputSource
+                        inputSource))
+            {
+                return false;
+            }
+
+            ClientPlayerInputPublisher publisher =
+                player.GetComponent<
+                    ClientPlayerInputPublisher>();
+
+            if (publisher == null)
+            {
+                publisher =
+                    player.AddComponent<
+                        ClientPlayerInputPublisher>();
+            }
+
+            publisher.ConfigureWithStateGuard(
+                inputSource,
+                sendInput,
+                canSendInput);
+
+            return true;
+        }
+
+        private static bool TryEnableRemoteSimulation(
+            GameObject player)
+        {
+            if (player == null)
+            {
+                return false;
+            }
+
+            RemotePlayerInputSource inputSource =
+                player.GetComponent<
+                    RemotePlayerInputSource>();
+
+            if (inputSource == null)
+            {
+                inputSource =
+                    player.AddComponent<
+                        RemotePlayerInputSource>();
+            }
+
+            if (!player.TryGetComponent(
+                    out PlayerController controller))
+            {
+                return false;
+            }
+
+            controller.SetInputSource(
+                inputSource);
+
+            return true;
+        }
+
         private static void DisableLocalControl(
             GameObject player)
         {
@@ -514,6 +853,26 @@ namespace TopDownRoguelike.Gameplay.Networking
 
         private void OnDestroy()
         {
+            if (stateSnapshotClient != null)
+            {
+                stateSnapshotClient
+                    .PlayerStateSnapshotReceived -=
+                    HandleRemotePlayerStateSnapshot;
+
+                stateSnapshotClient =
+                    null;
+            }
+
+            if (remoteInputClient != null)
+            {
+                remoteInputClient
+                    .RemotePlayerInputReceived -=
+                    HandleRemotePlayerInput;
+
+                remoteInputClient =
+                    null;
+            }
+
             registry?.Clear();
 
             localPlayer = null;

@@ -260,8 +260,10 @@ namespace TopDownRoguelike.Networking.Transport
                 messageQueue.Enqueue(
                     NetworkTransportEvent.UdpPacketReceived(
                         decoded.Header.Type,
+                        decoded.Header.PlayerId,
                         decoded.Header.Sequence,
-                        decoded.Payload));
+                        decoded.Payload)
+                    );
             }
             catch (Exception exception)
             {
@@ -278,10 +280,9 @@ namespace TopDownRoguelike.Networking.Transport
         private bool MatchesCredentials(
             UdpMessageHeader header)
         {
-            if (header.PlayerId != playerId ||
-                header.SessionToken == null ||
+            if (header.SessionToken == null ||
                 header.SessionToken.Length !=
-                sessionToken.Length)
+                    sessionToken.Length)
             {
                 return false;
             }
@@ -297,7 +298,17 @@ namespace TopDownRoguelike.Networking.Transport
                 }
             }
 
-            return true;
+            if (header.Type ==
+                MessageType.PlayerInput ||
+            header.Type ==
+                MessageType.PlayerStateSnapshot)
+            {
+                return header.PlayerId != 0u &&
+                    header.PlayerId != playerId;
+            }
+
+            return header.PlayerId ==
+                playerId;
         }
     }
 }

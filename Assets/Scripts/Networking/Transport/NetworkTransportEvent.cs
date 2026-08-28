@@ -23,6 +23,7 @@ namespace TopDownRoguelike.Networking.Transport
             NetworkTransportKind transportKind,
             NetworkTransportEventType eventType,
             MessageType packetType,
+            uint playerId,
             uint sequence,
             byte[] payload,
             string errorMessage)
@@ -30,6 +31,7 @@ namespace TopDownRoguelike.Networking.Transport
             TransportKind = transportKind;
             EventType = eventType;
             PacketType = packetType;
+            PlayerId = playerId;
             Sequence = sequence;
             Payload = payload;
             ErrorMessage = errorMessage;
@@ -40,6 +42,8 @@ namespace TopDownRoguelike.Networking.Transport
         public NetworkTransportEventType EventType { get; }
 
         public MessageType PacketType { get; }
+
+        public uint PlayerId { get; }
 
         public uint Sequence { get; }
 
@@ -55,6 +59,7 @@ namespace TopDownRoguelike.Networking.Transport
                 NetworkTransportEventType.Connected,
                 MessageType.Invalid,
                 0u,
+                0u,
                 Array.Empty<byte>(),
                 string.Empty);
         }
@@ -69,12 +74,14 @@ namespace TopDownRoguelike.Networking.Transport
                 NetworkTransportEventType.PacketReceived,
                 packetType,
                 0u,
+                0u,
                 payload,
                 string.Empty);
         }
 
         public static NetworkTransportEvent UdpPacketReceived(
             MessageType packetType,
+            uint playerId,
             uint sequence,
             byte[] payload)
         {
@@ -82,6 +89,7 @@ namespace TopDownRoguelike.Networking.Transport
                 NetworkTransportKind.Udp,
                 NetworkTransportEventType.PacketReceived,
                 packetType,
+                playerId,
                 sequence,
                 payload,
                 string.Empty);
@@ -95,6 +103,7 @@ namespace TopDownRoguelike.Networking.Transport
                 NetworkTransportEventType.Disconnected,
                 MessageType.Invalid,
                 0u,
+                0u,
                 Array.Empty<byte>(),
                 string.Empty);
         }
@@ -107,6 +116,7 @@ namespace TopDownRoguelike.Networking.Transport
                 transportKind,
                 NetworkTransportEventType.Error,
                 MessageType.Invalid,
+                0u,
                 0u,
                 Array.Empty<byte>(),
                 errorMessage);

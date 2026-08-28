@@ -109,6 +109,60 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void AimDirectionExposesCachedDirectionAsReadOnly()
+        {
+            GameObject player =
+                CreatePlayer(
+                    out _,
+                    out Component controller,
+                    out _);
+
+            try
+            {
+                var expectedDirection =
+                    new Vector2(
+                        0.6f,
+                        0.8f);
+
+                SetPrivateField(
+                    controller,
+                    "aimDirection",
+                    expectedDirection);
+
+                PropertyInfo aimDirectionProperty =
+                    playerControllerType.GetProperty(
+                        "AimDirection",
+                        BindingFlags.Instance |
+                        BindingFlags.Public);
+
+                Assert.That(
+                    aimDirectionProperty,
+                    Is.Not.Null,
+                    "PlayerController should expose " +
+                    "a public AimDirection property.");
+
+                Assert.That(
+                    aimDirectionProperty.CanRead,
+                    Is.True);
+
+                Assert.That(
+                    aimDirectionProperty.CanWrite,
+                    Is.False,
+                    "AimDirection must be read-only.");
+
+                Assert.That(
+                    (Vector2)aimDirectionProperty.GetValue(
+                        controller),
+                    Is.EqualTo(expectedDirection));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    player);
+            }
+        }
+
+        [Test]
         public void ZeroAimDirectionKeepsCurrentRotation()
         {
             GameObject player =

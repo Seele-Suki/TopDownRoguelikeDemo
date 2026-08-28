@@ -1,14 +1,15 @@
+using NUnit.Framework;
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using System.Reflection;
-using NUnit.Framework;
+using System.Text;
+using System.Threading;
+using TopDownRoguelike.Infrastructure;
 using TopDownRoguelike.Networking.Client;
 using TopDownRoguelike.Networking.Protocol;
-using TopDownRoguelike.Infrastructure;
-using System.Collections.Generic;
-using System.Text;
+using TopDownRoguelike.Networking.Transport;
 
 namespace TopDownRoguelike.Tests.EditMode
 {
@@ -831,10 +832,393 @@ namespace TopDownRoguelike.Tests.EditMode
             }
         }
 
+        [Test]
+        public void SendPlayerInput_WhenNotInRoom_RejectsSend()
+        {
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                var input =
+                    new PlayerInputPayload(
+                        0.6f,
+                        0.8f,
+                        1f,
+                        0f);
+
+                InvalidOperationException exception =
+                    Assert.Throws<InvalidOperationException>(
+                        () =>
+                            client.SendPlayerInput(
+                                input));
+
+                Assert.That(
+                    exception.Message,
+                    Does.Contain("in a room"));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
+        public void SendPlayerStateSnapshot_WhenNotInRoom_RejectsSend()
+        {
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                var snapshot =
+                    new PlayerStateSnapshotPayload(
+                        new[]
+                        {
+                            new PlayerStateRecord(
+                                7u,
+                                -1f,
+                                2f,
+                                1f,
+                                0f),
+
+                            new PlayerStateRecord(
+                                9u,
+                                3f,
+                                -2f,
+                                0f,
+                                1f)
+                        });
+
+                InvalidOperationException exception =
+                    Assert.Throws<InvalidOperationException>(
+                        () =>
+                            client.SendPlayerStateSnapshot(
+                                snapshot));
+
+                Assert.That(
+                    exception.Message,
+                    Does.Contain("in a room"));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
+        public void ForwardedPlayerInput_RaisesRemoteInputEvent()
+        {
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                uint receivedPlayerId =
+                    0u;
+
+                PlayerInputPayload receivedInput =
+                    null;
+
+                client.RemotePlayerInputReceived +=
+                    (playerId, input) =>
+                    {
+                        receivedPlayerId =
+                            playerId;
+
+                        receivedInput =
+                            input;
+                    };
+
+                SetClientState(
+                    client,
+                    NetworkClientState.InRoom);
+
+                var expectedInput =
+                    new PlayerInputPayload(
+                        0.6f,
+                        0.8f,
+                        -1f,
+                        0.25f);
+
+                byte[] payload =
+                    PlayerInputCodec.Encode(
+                        expectedInput);
+
+                NetworkTransportEvent transportEvent =
+                    NetworkTransportEvent.UdpPacketReceived(
+                        MessageType.PlayerInput,
+                        9u,
+                        21u,
+                        payload);
+
+                DispatchTransportEvent(
+                    client,
+                    transportEvent);
+
+                Assert.That(
+                    receivedPlayerId,
+                    Is.EqualTo(9u));
+
+                Assert.That(
+                    receivedInput,
+                    Is.Not.Null);
+
+                Assert.That(
+                    receivedInput.MoveX,
+                    Is.EqualTo(0.6f));
+
+                Assert.That(
+                    receivedInput.MoveY,
+                    Is.EqualTo(0.8f));
+
+                Assert.That(
+                    receivedInput.AimX,
+                    Is.EqualTo(-1f));
+
+                Assert.That(
+                    receivedInput.AimY,
+                    Is.EqualTo(0.25f));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
+        public void ForwardedPlayerStateSnapshot_RaisesDecodedStateEvent()
+        {
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                uint receivedSenderId =
+                    0u;
+
+                PlayerStateSnapshotPayload
+                    receivedSnapshot = null;
+
+                client.PlayerStateSnapshotReceived +=
+                    (senderId, snapshot) =>
+                    {
+                        receivedSenderId =
+                            senderId;
+
+                        receivedSnapshot =
+                            snapshot;
+                    };
+
+                SetClientState(
+                    client,
+                    NetworkClientState.InRoom);
+
+                var expectedSnapshot =
+                    new PlayerStateSnapshotPayload(
+                        new[]
+                        {
+                    new PlayerStateRecord(
+                        11u,
+                        -1f,
+                        2f,
+                        1f,
+                        0f),
+
+                    new PlayerStateRecord(
+                        22u,
+                        3f,
+                        -2f,
+                        0f,
+                        1f)
+                        });
+
+                byte[] payload =
+                    PlayerStateSnapshotCodec.Encode(
+                        expectedSnapshot);
+
+                NetworkTransportEvent transportEvent =
+                    NetworkTransportEvent.UdpPacketReceived(
+                        MessageType.PlayerStateSnapshot,
+                        11u,
+                        31u,
+                        payload);
+
+                DispatchTransportEvent(
+                    client,
+                    transportEvent);
+
+                Assert.That(
+                    receivedSenderId,
+                    Is.EqualTo(11u));
+
+                Assert.That(
+                    receivedSnapshot,
+                    Is.Not.Null);
+
+                Assert.That(
+                    receivedSnapshot.Players.Count,
+                    Is.EqualTo(2));
+
+                Assert.That(
+                    receivedSnapshot.Players[0].PlayerId,
+                    Is.EqualTo(11u));
+
+                Assert.That(
+                    receivedSnapshot.Players[0].PositionX,
+                    Is.EqualTo(-1f));
+
+                Assert.That(
+                    receivedSnapshot.Players[1].PlayerId,
+                    Is.EqualTo(22u));
+
+                Assert.That(
+                    receivedSnapshot.Players[1].AimY,
+                    Is.EqualTo(1f));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
+        public void ForwardedPlayerStateSnapshot_IgnoresDuplicateAndOlderSequences()
+        {
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                int receivedCount = 0;
+                uint lastReceivedSequence = 0u;
+
+                client.PlayerStateSnapshotReceived +=
+                    (_, __) =>
+                    {
+                        receivedCount++;
+                    };
+
+                SetClientState(
+                    client,
+                    NetworkClientState.InRoom);
+
+                var snapshot =
+                    new PlayerStateSnapshotPayload(
+                        new[]
+                        {
+                    new PlayerStateRecord(
+                        11u,
+                        1f,
+                        2f,
+                        1f,
+                        0f)
+                        });
+
+                byte[] payload =
+                    PlayerStateSnapshotCodec.Encode(
+                        snapshot);
+
+                DispatchTransportEvent(
+                    client,
+                    NetworkTransportEvent.UdpPacketReceived(
+                        MessageType.PlayerStateSnapshot,
+                        11u,
+                        10u,
+                        payload));
+
+                DispatchTransportEvent(
+                    client,
+                    NetworkTransportEvent.UdpPacketReceived(
+                        MessageType.PlayerStateSnapshot,
+                        11u,
+                        10u,
+                        payload));
+
+                DispatchTransportEvent(
+                    client,
+                    NetworkTransportEvent.UdpPacketReceived(
+                        MessageType.PlayerStateSnapshot,
+                        11u,
+                        9u,
+                        payload));
+
+                Assert.That(
+                    receivedCount,
+                    Is.EqualTo(1),
+                    "Duplicate and older snapshots must " +
+                    "be ignored.");
+
+                DispatchTransportEvent(
+                    client,
+                    NetworkTransportEvent.UdpPacketReceived(
+                        MessageType.PlayerStateSnapshot,
+                        11u,
+                        11u,
+                        payload));
+
+                Assert.That(
+                    receivedCount,
+                    Is.EqualTo(2));
+
+                lastReceivedSequence =
+                    11u;
+
+                Assert.That(
+                    lastReceivedSequence,
+                    Is.EqualTo(11u));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        private static void SetClientState(
+            NetworkClient client,
+            NetworkClientState state)
+        {
+            PropertyInfo stateProperty =
+                typeof(NetworkClient).GetProperty(
+                    nameof(NetworkClient.State),
+                    BindingFlags.Instance |
+                    BindingFlags.Public);
+
+            MethodInfo privateSetter =
+                stateProperty?.GetSetMethod(true);
+
+            Assert.That(
+                privateSetter,
+                Is.Not.Null);
+
+            privateSetter.Invoke(
+                client,
+                new object[] { state });
+        }
+
+        private static void DispatchTransportEvent(
+            NetworkClient client,
+            NetworkTransportEvent transportEvent)
+        {
+            MethodInfo handler =
+                typeof(NetworkClient).GetMethod(
+                    "HandleTransportEvent",
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic);
+
+            Assert.That(
+                handler,
+                Is.Not.Null);
+
+            handler.Invoke(
+                client,
+                new object[] { transportEvent });
+        }
+
         private static List<DecodedPacket>
-    ReceiveTcpPackets(
-        TcpClient client,
-        int expectedCount)
+            ReceiveTcpPackets(
+                TcpClient client,
+                int expectedCount)
         {
             NetworkStream stream =
                 client.GetStream();

@@ -34,6 +34,10 @@ add_executable(NetworkServer
     src/net/UdpBindHandler.cpp
     src/net/UdpPingHandler.h
     src/net/UdpPingHandler.cpp
+    src/net/PlayerInputForwarder.h
+    src/net/PlayerInputForwarder.cpp
+    src/net/PlayerStateForwarder.h
+    src/net/PlayerStateForwarder.cpp
 
     src/protocol/MessageType.h
     src/protocol/MessageHeader.h
@@ -495,6 +499,10 @@ add_executable(ServerLoopTests
     src/net/UdpBindHandler.cpp
     src/net/UdpPingHandler.h
     src/net/UdpPingHandler.cpp
+    src/net/PlayerInputForwarder.h
+    src/net/PlayerInputForwarder.cpp
+    src/net/PlayerStateForwarder.h
+    src/net/PlayerStateForwarder.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -521,6 +529,10 @@ add_executable(ServerLoopTests
     src/protocol/UdpPacketCodec.cpp
     src/protocol/RoomStateSnapshotCodec.h
     src/protocol/RoomStateSnapshotCodec.cpp
+    src/protocol/PlayerInputCodec.h
+    src/protocol/PlayerInputCodec.cpp
+    src/protocol/PlayerStateSnapshotCodec.h
+    src/protocol/PlayerStateSnapshotCodec.cpp
 )
 
 target_include_directories(ServerLoopTests
@@ -783,5 +795,75 @@ endif()
 add_test(
     NAME PlayerSyncCodecTests
     COMMAND PlayerSyncCodecTests
+)
+
+add_executable(PlayerInputForwarderTests
+    tests/PlayerInputForwarderTests.cpp
+
+    src/net/ServerCoordinator.h
+    src/net/ServerCoordinator.cpp
+    src/net/TcpClientSession.h
+    src/net/TcpClientSession.cpp
+    src/net/TcpConnection.h
+    src/net/TcpConnection.cpp
+    src/net/SocketRuntime.h
+    src/net/SocketRuntime.cpp
+    src/net/PlayerInputForwarder.h
+    src/net/PlayerInputForwarder.cpp
+    src/net/PlayerStateForwarder.h
+    src/net/PlayerStateForwarder.cpp
+
+    src/room/ClientState.h
+    src/room/ClientState.cpp
+    src/room/Room.h
+    src/room/Room.cpp
+    src/room/RoomManager.h
+    src/room/RoomManager.cpp
+    src/room/PlayerIdAllocator.h
+    src/room/PlayerIdAllocator.cpp
+    src/room/SessionTokenGenerator.h
+    src/room/SessionTokenGenerator.cpp
+
+    src/protocol/PacketCodec.h
+    src/protocol/PacketCodec.cpp
+    src/protocol/MessageType.h
+    src/protocol/MessageHeader.h
+    src/protocol/NetworkByteOrder.h
+    src/protocol/SessionTokenCodec.h
+    src/protocol/SessionTokenCodec.cpp
+    src/protocol/UdpMessageHeader.h
+    src/protocol/UdpPacketCodec.h
+    src/protocol/UdpPacketCodec.cpp
+    src/protocol/UdpSequenceTracker.h
+    src/protocol/PlayerInputCodec.h
+    src/protocol/PlayerInputCodec.cpp
+    src/protocol/RoomStateSnapshotCodec.h
+    src/protocol/RoomStateSnapshotCodec.cpp
+    src/protocol/PlayerStateSnapshotCodec.h
+    src/protocol/PlayerStateSnapshotCodec.cpp
+)
+
+target_include_directories(PlayerInputForwarderTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(PlayerInputForwarderTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(PlayerInputForwarderTests
+        PRIVATE
+            ws2_32
+            bcrypt
+    )
+endif()
+
+add_test(
+    NAME PlayerInputForwarderTests
+    COMMAND PlayerInputForwarderTests
 )
 endif()

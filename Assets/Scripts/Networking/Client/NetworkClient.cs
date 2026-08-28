@@ -3,6 +3,7 @@ using System.Text;
 using TopDownRoguelike.Infrastructure;
 using TopDownRoguelike.Networking.Protocol;
 using TopDownRoguelike.Networking.Transport;
+using UnityEngine;
 
 namespace TopDownRoguelike.Networking.Client
 {
@@ -41,6 +42,10 @@ namespace TopDownRoguelike.Networking.Client
             1u;
 
         private uint pendingBindSequence;
+
+        private bool hasLastPlayerStateSequence;
+
+        private uint lastPlayerStateSequence;
 
         private bool disposed;
 
@@ -83,6 +88,16 @@ namespace TopDownRoguelike.Networking.Client
 
         public event Action
             GameStarted;
+
+        public event Action<
+            uint,
+            PlayerInputPayload>
+            RemotePlayerInputReceived;
+
+        public event Action<
+            uint,
+            PlayerStateSnapshotPayload>
+            PlayerStateSnapshotReceived;
 
         public NetworkClientState State
         {
@@ -424,6 +439,82 @@ namespace TopDownRoguelike.Networking.Client
             }
         }
 
+        public void SendPlayerInput(
+            PlayerInputPayload input)
+        {
+            ThrowIfDisposed();
+
+            if (State !=
+                NetworkClientState.InRoom)
+            {
+                throw new InvalidOperationException(
+                    "Network client must be in a room " +
+                    "before sending player input.");
+            }
+
+            byte[] payload =
+                PlayerInputCodec.Encode(
+                    input);
+
+            uint sequence =
+                nextUdpSequence;
+
+            nextUdpSequence =
+                unchecked(
+                    nextUdpSequence + 1u);
+
+            try
+            {
+                udpTransport.Send(
+                    MessageType.PlayerInput,
+                    sequence,
+                    payload);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
+        public void SendPlayerStateSnapshot(
+            PlayerStateSnapshotPayload snapshot)
+        {
+            ThrowIfDisposed();
+
+            if (State !=
+                NetworkClientState.InRoom)
+            {
+                throw new InvalidOperationException(
+                    "Network client must be in a room " +
+                    "before sending a player state snapshot.");
+            }
+
+            byte[] payload =
+                PlayerStateSnapshotCodec.Encode(
+                    snapshot);
+
+            uint sequence =
+                nextUdpSequence;
+
+            nextUdpSequence =
+                unchecked(
+                    nextUdpSequence + 1u);
+
+            try
+            {
+                udpTransport.Send(
+                    MessageType.PlayerStateSnapshot,
+                    sequence,
+                    payload);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
         public int Tick()
         {
             ThrowIfDisposed();
@@ -640,6 +731,35 @@ namespace TopDownRoguelike.Networking.Client
 
             if (transportEvent.TransportKind ==
                 NetworkTransportKind.Udp &&
+            transportEvent.PacketType ==
+                MessageType.PlayerInput &&
+            State ==
+                NetworkClientState.InRoom)
+            {
+                HandleRemotePlayerInput(
+                    transportEvent.PlayerId,
+                    transportEvent.Payload);
+
+                return;
+            }
+
+            if (transportEvent.TransportKind ==
+                NetworkTransportKind.Udp &&
+                transportEvent.PacketType ==
+                MessageType.PlayerStateSnapshot &&
+                State ==
+                NetworkClientState.InRoom)
+            {
+                HandlePlayerStateSnapshot(
+                    transportEvent.PlayerId,
+                    transportEvent.Sequence,
+                    transportEvent.Payload);
+
+                return;
+            }
+
+            if (transportEvent.TransportKind ==
+                NetworkTransportKind.Udp &&
                 transportEvent.PacketType ==
                 MessageType.UdpBindAccepted &&
                 State ==
@@ -798,6 +918,94 @@ namespace TopDownRoguelike.Networking.Client
                 Fail(
                     exception.Message);
             }
+        }
+
+        private void HandleRemotePlayerInput(
+            uint remotePlayerId,
+            byte[] payload)
+        {
+            try
+            {
+                if (remotePlayerId == 0u)
+                {
+                    throw new InvalidOperationException(
+                        "Remote PlayerInput contains " +
+                        "an invalid player ID.");
+                }
+
+                if (remotePlayerId ==
+                    PlayerId)
+                {
+                    throw new InvalidOperationException(
+                        "Remote PlayerInput cannot use " +
+                        "the local player ID.");
+                }
+
+                PlayerInputPayload input =
+                    PlayerInputCodec.Decode(
+                        payload);
+
+                RemotePlayerInputReceived?.Invoke(
+                    remotePlayerId,
+                    input);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
+        private void HandlePlayerStateSnapshot(
+            uint senderPlayerId,
+            uint sequence,
+            byte[] payload)
+        {
+            try
+            {
+                if (senderPlayerId == 0u)
+                {
+                    throw new InvalidOperationException(
+                        "Player state snapshot contains " +
+                        "an invalid sender ID.");
+                }
+
+                PlayerStateSnapshotPayload snapshot =
+                    PlayerStateSnapshotCodec.Decode(
+                        payload);
+
+                if (hasLastPlayerStateSequence &&
+                    !IsSequenceNewer(
+                        sequence,
+                        lastPlayerStateSequence))
+                {
+                    return;
+                }
+
+                hasLastPlayerStateSequence =
+                    true;
+
+                lastPlayerStateSequence =
+                    sequence;
+
+                PlayerStateSnapshotReceived?.Invoke(
+                    senderPlayerId,
+                    snapshot);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
+        private static bool IsSequenceNewer(
+            uint candidate,
+            uint current)
+        {
+            return candidate != current &&
+                unchecked(
+                    (int)(candidate - current)) > 0;
         }
 
         private void HandleLeaveRoom(
@@ -989,6 +1197,12 @@ namespace TopDownRoguelike.Networking.Client
             pendingBindSequence =
                 0u;
 
+            hasLastPlayerStateSequence =
+                false;
+
+            lastPlayerStateSequence =
+                0u;
+
             serverAddress =
                 string.Empty;
 
@@ -1003,6 +1217,9 @@ namespace TopDownRoguelike.Networking.Client
             {
                 return;
             }
+
+            NetworkClientState previousState =
+                State;
 
             State =
                 nextState;

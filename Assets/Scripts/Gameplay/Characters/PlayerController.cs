@@ -13,6 +13,14 @@ public class PlayerController : MonoBehaviour
     private PlayerHealth playerHealth;
     private IPlayerInputSource inputSource;
 
+    public Vector2 AimDirection
+    {
+        get
+        {
+            return aimDirection;
+        }
+    }
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();

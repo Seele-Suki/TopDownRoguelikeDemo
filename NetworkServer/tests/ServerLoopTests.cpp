@@ -5,9 +5,11 @@
 #include "net/UdpSocket.h"
 #include "protocol/MessageHeader.h"
 #include "protocol/PacketCodec.h"
+#include "protocol/PlayerInputCodec.h"
 #include "protocol/UdpBindingCredentialsCodec.h"
 #include "protocol/UdpPacketCodec.h"
 #include "protocol/RoomStateSnapshotCodec.h"
+#include "protocol/PlayerStateSnapshotCodec.h"
 
 #include <WinSock2.h>
 #include <WS2tcpip.h>
@@ -379,6 +381,277 @@ namespace
 
         return bytes;
     }
+
+    bool PlayerInputIsForwardedToHost()
+    {
+        tdr::net::TcpListener listener;
+        listener.BindAndListen(0);
+
+        tdr::net::UdpSocket serverUdpSocket;
+        serverUdpSocket.Bind(0);
+
+        tdr::net::ServerCoordinator coordinator;
+
+        auto& host =
+            coordinator.CreateSession();
+
+        auto& guest =
+            coordinator.CreateSession();
+
+        SendSessionPacket(
+            host,
+            tdr::protocol::MessageType::SetNickname,
+            {
+                static_cast<std::uint8_t>('H'),
+                static_cast<std::uint8_t>('o'),
+                static_cast<std::uint8_t>('s'),
+                static_cast<std::uint8_t>('t')
+            });
+
+        SendSessionPacket(
+            host,
+            tdr::protocol::MessageType::CreateRoomRequest,
+            {});
+
+        SendSessionPacket(
+            guest,
+            tdr::protocol::MessageType::SetNickname,
+            {
+                static_cast<std::uint8_t>('G'),
+                static_cast<std::uint8_t>('u'),
+                static_cast<std::uint8_t>('e'),
+                static_cast<std::uint8_t>('s'),
+                static_cast<std::uint8_t>('t')
+            });
+
+        SendSessionPacket(
+            guest,
+            tdr::protocol::MessageType::JoinRoomRequest,
+            {});
+
+        SendSessionPacket(
+            host,
+            tdr::protocol::MessageType::SetPlayerSelection,
+            {
+                static_cast<std::uint8_t>(
+                    tdr::room::CharacterId::Ranged),
+                static_cast<std::uint8_t>(
+                    tdr::room::DifficultyId::Normal)
+            });
+
+        SendSessionPacket(
+            guest,
+            tdr::protocol::MessageType::SetPlayerSelection,
+            {
+                static_cast<std::uint8_t>(
+                    tdr::room::CharacterId::Melee),
+                static_cast<std::uint8_t>(
+                    tdr::room::DifficultyId::None)
+            });
+
+        SendSessionPacket(
+            host,
+            tdr::protocol::MessageType::SetReady,
+            { 1U });
+
+        SendSessionPacket(
+            guest,
+            tdr::protocol::MessageType::SetReady,
+            { 1U });
+
+        SendSessionPacket(
+            host,
+            tdr::protocol::MessageType::StartGameRequest,
+            {});
+
+        tdr::net::UdpSocket hostUdpSocket;
+        hostUdpSocket.Bind(0);
+
+        tdr::net::UdpSocket guestUdpSocket;
+        guestUdpSocket.Bind(0);
+
+        SetReceiveTimeout(
+            hostUdpSocket.NativeHandle());
+
+        SetReceiveTimeout(
+            guestUdpSocket.NativeHandle());
+
+        const sockaddr_in6 hostAddress =
+            CreateUdpLoopbackAddress(
+                hostUdpSocket.BoundPort());
+
+        const sockaddr_in6 guestAddress =
+            CreateUdpLoopbackAddress(
+                guestUdpSocket.BoundPort());
+
+        host.BindUdpEndpoint(hostAddress);
+        guest.BindUdpEndpoint(guestAddress);
+
+        tdr::net::ServerLoop serverLoop(
+            listener,
+            serverUdpSocket,
+            coordinator);
+
+        const tdr::protocol::PlayerInputPayload input{
+            0.75F,
+            -0.5F,
+            1.0F,
+            0.25F
+        };
+
+        const auto payload =
+            tdr::protocol::PlayerInputCodec::Encode(
+                input);
+
+        tdr::protocol::UdpMessageHeader header{};
+        header.type =
+            tdr::protocol::MessageType::PlayerInput;
+        header.sessionToken =
+            guest.SessionTokenBytes();
+        header.playerId =
+            guest.PlayerId();
+        header.sequence = 21U;
+
+        const auto datagram =
+            tdr::protocol::UdpPacketCodec::Encode(
+                header,
+                payload);
+
+        const sockaddr_in6 serverAddress =
+            CreateUdpLoopbackAddress(
+                serverUdpSocket.BoundPort());
+
+        static_cast<void>(
+            guestUdpSocket.SendTo(
+                datagram.data(),
+                datagram.size(),
+                serverAddress)
+            );
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000));
+
+        std::array<std::uint8_t, 256>
+            receiveBuffer{};
+
+        sockaddr_in6 responseSource{};
+
+        const std::size_t receivedSize =
+            hostUdpSocket.ReceiveFrom(
+                receiveBuffer.data(),
+                receiveBuffer.size(),
+                responseSource);
+
+        const auto received =
+            tdr::protocol::UdpPacketCodec::Decode(
+                receiveBuffer.data(),
+                receivedSize);
+
+        if (received.header.type !=
+            tdr::protocol::MessageType::PlayerInput ||
+            received.header.playerId !=
+            guest.PlayerId() ||
+            received.header.sequence != 21U ||
+            received.header.sessionToken !=
+            host.SessionTokenBytes() ||
+            received.payload != payload)
+        {
+            std::cerr
+                << "[FAIL] ServerLoop forwarded "
+                << "the wrong PlayerInput datagram."
+                << std::endl;
+
+            return false;
+        }
+
+        const tdr::protocol::PlayerStateSnapshotPayload
+            stateSnapshot{
+                {
+                    {
+                        host.PlayerId(),
+                        -1.0F,
+                        2.0F,
+                        1.0F,
+                        0.0F
+                    },
+                    {
+                        guest.PlayerId(),
+                        3.0F,
+                        -2.0F,
+                        0.0F,
+                        1.0F
+                    }
+                }
+        };
+
+        const auto statePayload =
+            tdr::protocol::
+            PlayerStateSnapshotCodec::Encode(
+                stateSnapshot);
+
+        tdr::protocol::UdpMessageHeader
+            stateHeader{};
+
+        stateHeader.type =
+            tdr::protocol::MessageType::
+            PlayerStateSnapshot;
+
+        stateHeader.sessionToken =
+            host.SessionTokenBytes();
+
+        stateHeader.playerId =
+            host.PlayerId();
+
+        stateHeader.sequence = 31U;
+
+        const auto stateDatagram =
+            tdr::protocol::UdpPacketCodec::Encode(
+                stateHeader,
+                statePayload);
+
+        static_cast<void>(
+            hostUdpSocket.SendTo(
+                stateDatagram.data(),
+                stateDatagram.size(),
+                serverAddress)
+            );
+
+        serverLoop.PollOnce(
+            std::chrono::milliseconds(1000));
+
+        sockaddr_in6 stateResponseSource{};
+
+        const std::size_t stateReceivedSize =
+            guestUdpSocket.ReceiveFrom(
+                receiveBuffer.data(),
+                receiveBuffer.size(),
+                stateResponseSource);
+
+        const auto receivedState =
+            tdr::protocol::UdpPacketCodec::Decode(
+                receiveBuffer.data(),
+                stateReceivedSize);
+
+        if (receivedState.header.type !=
+            tdr::protocol::MessageType::
+            PlayerStateSnapshot ||
+            receivedState.header.playerId !=
+            host.PlayerId() ||
+            receivedState.header.sequence != 31U ||
+            receivedState.header.sessionToken !=
+            guest.SessionTokenBytes() ||
+            receivedState.payload != statePayload)
+        {
+            std::cerr
+                << "[FAIL] ServerLoop forwarded "
+                << "the wrong PlayerStateSnapshot."
+                << std::endl;
+
+            return false;
+        }
+
+        return true;
+    }
 }
 
 int main()
@@ -386,6 +659,11 @@ int main()
     try
     {
         tdr::net::SocketRuntime socketRuntime;
+
+        if (!PlayerInputIsForwardedToHost())
+        {
+            return 1;
+        }
 
         tdr::net::TcpListener listener;
         listener.BindAndListen(0);

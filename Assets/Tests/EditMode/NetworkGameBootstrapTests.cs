@@ -1,10 +1,14 @@
 using TMPro;
 using UnityEngine.UI;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using TopDownRoguelike.Networking.Gameplay;
 using TopDownRoguelike.Infrastructure;
+using TopDownRoguelike.Networking.Protocol;
+using TopDownRoguelike.Networking.Client;
+using TopDownRoguelike.Networking.Transport;
 using UnityEngine;
 
 namespace TopDownRoguelike.Tests.EditMode
@@ -220,19 +224,131 @@ namespace TopDownRoguelike.Tests.EditMode
             }
         }
 
+        [TestCase(GameMode.SinglePlayer)]
+        [TestCase(GameMode.MultiplayerClient)]
+        public void TryConfigureHostStatePublisher_NonHostModeDoesNotCreatePublisher(
+            GameMode mode)
+        {
+            Type bootstrapType =
+                FindType(BootstrapTypeName);
+
+            Type statePublisherType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "HostPlayerStatePublisher");
+
+            Assert.That(bootstrapType, Is.Not.Null);
+            Assert.That(statePublisherType, Is.Not.Null);
+
+            var bootstrapObject =
+                new GameObject(
+                    "Non-Host State Publisher Test");
+
+            bootstrapObject.SetActive(false);
+
+            try
+            {
+                if (mode == GameMode.SinglePlayer)
+                {
+                    GameSession.ConfigureSinglePlayer();
+                }
+                else
+                {
+                    GameSession.ConfigureMultiplayerClient();
+                }
+
+                Component bootstrap =
+                    bootstrapObject.AddComponent(
+                        bootstrapType);
+
+                InvokePrivate(
+                    bootstrap,
+                    "Awake");
+
+                Action<PlayerStateSnapshotPayload> sender =
+                    _ => { };
+
+                InvokePrivate(
+                    bootstrap,
+                    "TryConfigureHostStatePublisher",
+                    11u,
+                    22u,
+                    sender);
+
+                Component publisher =
+                    bootstrapObject.GetComponent(
+                        statePublisherType);
+
+                Assert.That(
+                    publisher,
+                    Is.Null,
+                    "Non-host modes must not create a " +
+                    "HostPlayerStatePublisher.");
+            }
+            finally
+            {
+                GameSession.Reset();
+
+                UnityEngine.Object.DestroyImmediate(
+                    bootstrapObject);
+            }
+        }
+
         [Test]
         public void ConfigureHostPlayers_CreatesTwoRegisteredPlayers()
         {
             Type bootstrapType =
                 FindType(BootstrapTypeName);
 
+            Type statePublisherType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "HostPlayerStatePublisher");
+
+            Type localInputSourceType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Characters." +
+                    "LocalPlayerInputSource");
+
+            Type remoteInputSourceType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "RemotePlayerInputSource");
+
+            Type playerControllerType =
+                FindType("PlayerController");
+
+            Assert.That(
+                localInputSourceType,
+                Is.Not.Null);
+
+            Assert.That(
+                remoteInputSourceType,
+                Is.Not.Null);
+
+            Assert.That(
+                playerControllerType,
+                Is.Not.Null);
+
             Assert.That(bootstrapType, Is.Not.Null);
+
+            Assert.That(
+                statePublisherType,
+                Is.Not.Null);
 
             var bootstrapObject =
                 new GameObject("Bootstrap Test");
 
             var scenePlayer =
                 new GameObject("Scene Player");
+
+            scenePlayer.AddComponent<Rigidbody2D>();
+
+            scenePlayer.AddComponent(
+                localInputSourceType);
+
+            scenePlayer.AddComponent(
+                playerControllerType);
 
             var hostSpawnObject =
                 new GameObject("Host Spawn Point");
@@ -342,9 +458,114 @@ namespace TopDownRoguelike.Tests.EditMode
                     remotePlayer.transform.position,
                     Is.EqualTo(
                         clientSpawnObject.transform.position));
+
+                Component remoteInput =
+                    remotePlayer.GetComponent(
+                        remoteInputSourceType);
+
+                Behaviour remoteController =
+                    remotePlayer.GetComponent(
+                        playerControllerType)
+                    as Behaviour;
+
+                Assert.That(
+                    remoteInput,
+                    Is.Not.Null);
+
+                Assert.That(
+                    remoteController,
+                    Is.Not.Null);
+
+                Assert.That(
+                    remoteController.enabled,
+                    Is.True);
+
+                var input =
+                    new PlayerInputPayload(
+                        0.6f,
+                        0.8f,
+                        -1f,
+                        0.25f);
+
+                InvokePrivate(
+                    bootstrap,
+                    "HandleRemotePlayerInput",
+                    22u,
+                    input);
+
+                Assert.That(
+                    ReadVector2Property(
+                        remoteInput,
+                        "MoveDirection"),
+                    Is.EqualTo(
+                        new Vector2(0.6f, 0.8f)));
+
+                Assert.That(
+                    ReadVector2Property(
+                        remoteInput,
+                        "AimDirection"),
+                    Is.EqualTo(
+                        new Vector2(-1f, 0.25f).normalized));
+
+                GameSession.ConfigureMultiplayerHost();
+
+                var sentSnapshots =
+                    new List<PlayerStateSnapshotPayload>();
+
+                Action<PlayerStateSnapshotPayload> sender =
+                    sentSnapshots.Add;
+
+                InvokePrivate(
+                    bootstrap,
+                    "TryConfigureHostStatePublisher",
+                    11u,
+                    22u,
+                    sender);
+
+                Component statePublisher =
+                    bootstrapObject.GetComponent(
+                        statePublisherType);
+
+                Assert.That(
+                    statePublisher,
+                    Is.Not.Null,
+                    "The host bootstrap should create a " +
+                    "HostPlayerStatePublisher.");
+
+                MethodInfo advanceMethod =
+                    statePublisherType.GetMethod(
+                        "Advance",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    advanceMethod,
+                    Is.Not.Null);
+
+                advanceMethod.Invoke(
+                    statePublisher,
+                    new object[] { 0.051f });
+
+                Assert.That(
+                    sentSnapshots.Count,
+                    Is.EqualTo(1));
+
+                Assert.That(
+                    sentSnapshots[0].Players.Count,
+                    Is.EqualTo(2));
+
+                Assert.That(
+                    sentSnapshots[0].Players[0].PlayerId,
+                    Is.EqualTo(11u));
+
+                Assert.That(
+                    sentSnapshots[0].Players[1].PlayerId,
+                    Is.EqualTo(22u));
             }
             finally
             {
+                GameSession.Reset();
+
                 UnityEngine.Object.DestroyImmediate(
                     bootstrapObject);
 
@@ -371,7 +592,16 @@ namespace TopDownRoguelike.Tests.EditMode
             Type bootstrapType =
                 FindType(BootstrapTypeName);
 
+            Type interpolatorType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "RemotePlayerInterpolator");
+
             Assert.That(bootstrapType, Is.Not.Null);
+
+            Assert.That(
+                interpolatorType,
+                Is.Not.Null);
 
             var bootstrapObject =
                 new GameObject("Bootstrap Test");
@@ -483,6 +713,37 @@ namespace TopDownRoguelike.Tests.EditMode
                     remotePlayer.transform.position,
                     Is.EqualTo(
                         hostSpawnObject.transform.position));
+
+                Component interpolator =
+                    remotePlayer.GetComponent(
+                        interpolatorType);
+
+                Assert.That(
+                    interpolator,
+                    Is.Not.Null,
+                    "The client remote host object should " +
+                    "receive a RemotePlayerInterpolator.");
+
+                FieldInfo remotePlayerIdField =
+                    interpolatorType.GetField(
+                        "remotePlayerId",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    remotePlayerIdField,
+                    Is.Not.Null);
+
+                Assert.That(
+                    remotePlayerIdField.GetValue(
+                        interpolator),
+                    Is.EqualTo(11u),
+                    "The remote object must be bound to " +
+                    "the host player ID.");
+
+                Assert.That(
+                    ((Behaviour)interpolator).enabled,
+                    Is.True);
             }
             finally
             {
@@ -503,6 +764,595 @@ namespace TopDownRoguelike.Tests.EditMode
 
                 UnityEngine.Object.DestroyImmediate(
                     clientSpawnObject);
+            }
+        }
+
+        [Test]
+        public void HandleRemotePlayerStateSnapshot_RaisesGameplayEvent()
+        {
+            Type bootstrapType =
+                FindType(BootstrapTypeName);
+
+            Assert.That(
+                bootstrapType,
+                Is.Not.Null);
+
+            var bootstrapObject =
+                new GameObject(
+                    "State Event Bridge Test");
+
+            bootstrapObject.SetActive(false);
+
+            try
+            {
+                Component bootstrap =
+                    bootstrapObject.AddComponent(
+                        bootstrapType);
+
+                var snapshot =
+                    new PlayerStateSnapshotPayload(
+                        new[]
+                        {
+                    new PlayerStateRecord(
+                        11u,
+                        -1f,
+                        2f,
+                        1f,
+                        0f),
+
+                    new PlayerStateRecord(
+                        22u,
+                        3f,
+                        -2f,
+                        0f,
+                        1f)
+                        });
+
+                uint receivedSenderId =
+                    0u;
+
+                PlayerStateSnapshotPayload
+                    receivedSnapshot = null;
+
+                EventInfo stateEvent =
+                    bootstrapType.GetEvent(
+                        "PlayerStateSnapshotReceived",
+                        BindingFlags.Instance |
+                        BindingFlags.Public);
+
+                Assert.That(
+                    stateEvent,
+                    Is.Not.Null,
+                    "NetworkGameBootstrap must expose " +
+                    "PlayerStateSnapshotReceived.");
+
+                Action<uint, PlayerStateSnapshotPayload>
+                    handler =
+                        (senderId, received) =>
+                        {
+                            receivedSenderId =
+                                senderId;
+
+                            receivedSnapshot =
+                                received;
+                        };
+
+                stateEvent.AddEventHandler(
+                    bootstrap,
+                    handler);
+
+                InvokePrivate(
+                    bootstrap,
+                    "HandleRemotePlayerStateSnapshot",
+                    11u,
+                    snapshot);
+
+                Assert.That(
+                    receivedSenderId,
+                    Is.EqualTo(11u));
+
+                Assert.That(
+                    receivedSnapshot,
+                    Is.SameAs(snapshot));
+
+                Assert.That(
+                    receivedSnapshot.Players.Count,
+                    Is.EqualTo(2));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    bootstrapObject);
+            }
+        }
+
+        [Test]
+        public void SubscribeToRemoteStateSnapshots_ForwardsClientSnapshotEvent()
+        {
+            Type bootstrapType =
+                FindType(BootstrapTypeName);
+
+            Assert.That(
+                bootstrapType,
+                Is.Not.Null);
+
+            var bootstrapObject =
+                new GameObject(
+                    "State Subscription Test");
+
+            bootstrapObject.SetActive(false);
+
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                Component bootstrap =
+                    bootstrapObject.AddComponent(
+                        bootstrapType);
+
+                InvokePrivate(
+                    bootstrap,
+                    "Awake");
+
+                PropertyInfo stateProperty =
+                    typeof(NetworkClient).GetProperty(
+                        nameof(NetworkClient.State),
+                        BindingFlags.Instance |
+                        BindingFlags.Public);
+
+                MethodInfo stateSetter =
+                    stateProperty?.GetSetMethod(true);
+
+                Assert.That(
+                    stateSetter,
+                    Is.Not.Null);
+
+                stateSetter.Invoke(
+                    client,
+                    new object[]
+                    {
+                NetworkClientState.InRoom
+                    });
+
+                uint receivedSenderId =
+                    0u;
+
+                PlayerStateSnapshotPayload
+                    receivedSnapshot = null;
+
+                EventInfo bootstrapEvent =
+                    bootstrapType.GetEvent(
+                        "PlayerStateSnapshotReceived",
+                        BindingFlags.Instance |
+                        BindingFlags.Public);
+
+                Assert.That(
+                    bootstrapEvent,
+                    Is.Not.Null);
+
+                Action<uint, PlayerStateSnapshotPayload>
+                    handler =
+                        (senderId, snapshot) =>
+                        {
+                            receivedSenderId =
+                                senderId;
+
+                            receivedSnapshot =
+                                snapshot;
+                        };
+
+                bootstrapEvent.AddEventHandler(
+                    bootstrap,
+                    handler);
+
+                InvokePrivate(
+                    bootstrap,
+                    "SubscribeToRemoteStateSnapshots",
+                    client);
+
+                var expectedSnapshot =
+                    new PlayerStateSnapshotPayload(
+                        new[]
+                        {
+                    new PlayerStateRecord(
+                        11u,
+                        -1f,
+                        2f,
+                        1f,
+                        0f),
+
+                    new PlayerStateRecord(
+                        22u,
+                        3f,
+                        -2f,
+                        0f,
+                        1f)
+                        });
+
+                NetworkTransportEvent transportEvent =
+                    NetworkTransportEvent.UdpPacketReceived(
+                        MessageType.PlayerStateSnapshot,
+                        11u,
+                        8u,
+                        PlayerStateSnapshotCodec.Encode(
+                            expectedSnapshot));
+
+                MethodInfo handleTransportEvent =
+                    typeof(NetworkClient).GetMethod(
+                        "HandleTransportEvent",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    handleTransportEvent,
+                    Is.Not.Null);
+
+                handleTransportEvent.Invoke(
+                    client,
+                    new object[]
+                    {
+                transportEvent
+                    });
+
+                Assert.That(
+                    receivedSenderId,
+                    Is.EqualTo(11u));
+
+                Assert.That(
+                    receivedSnapshot,
+                    Is.Not.Null);
+
+                Assert.That(
+                    receivedSnapshot.Players.Count,
+                    Is.EqualTo(2));
+            }
+            finally
+            {
+                client.Dispose();
+
+                UnityEngine.Object.DestroyImmediate(
+                    bootstrapObject);
+            }
+        }
+
+        [Test]
+        public void TryConfigureRemoteInterpolator_AttachesRemotePlayerId()
+        {
+            Type bootstrapType =
+                FindType(BootstrapTypeName);
+
+            Type interpolatorType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "RemotePlayerInterpolator");
+
+            Assert.That(
+                bootstrapType,
+                Is.Not.Null);
+
+            Assert.That(
+                interpolatorType,
+                Is.Not.Null,
+                "RemotePlayerInterpolator must exist.");
+
+            var bootstrapObject =
+                new GameObject(
+                    "Remote Interpolator Bootstrap Test");
+
+            var remotePlayer =
+                new GameObject(
+                    "Remote Player Test");
+
+            bootstrapObject.SetActive(false);
+            remotePlayer.SetActive(false);
+
+            try
+            {
+                Component bootstrap =
+                    bootstrapObject.AddComponent(
+                        bootstrapType);
+
+                MethodInfo configureMethod =
+                    bootstrapType.GetMethod(
+                        "TryConfigureRemoteInterpolator",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    configureMethod,
+                    Is.Not.Null,
+                    "TryConfigureRemoteInterpolator " +
+                    "must exist.");
+
+                object result =
+                    configureMethod.Invoke(
+                        null,
+                        new object[]
+                        {
+                            remotePlayer,
+                            11u
+                        });
+
+                Assert.That(
+                    result,
+                    Is.EqualTo(true));
+
+                Component interpolator =
+                    remotePlayer.GetComponent(
+                        interpolatorType);
+
+                Assert.That(
+                    interpolator,
+                    Is.Not.Null);
+
+                FieldInfo playerIdField =
+                    interpolatorType.GetField(
+                        "remotePlayerId",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    playerIdField,
+                    Is.Not.Null);
+
+                Assert.That(
+                    playerIdField.GetValue(
+                        interpolator),
+                    Is.EqualTo(11u));
+
+                Assert.That(
+                    ((Behaviour)interpolator).enabled,
+                    Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    bootstrapObject);
+
+                UnityEngine.Object.DestroyImmediate(
+                    remotePlayer);
+            }
+        }
+
+        [Test]
+        public void HandleRemotePlayerStateSnapshot_UpdatesRemoteInterpolator()
+        {
+            Type bootstrapType =
+                FindType(BootstrapTypeName);
+
+            Type interpolatorType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "RemotePlayerInterpolator");
+
+            Assert.That(
+                bootstrapType,
+                Is.Not.Null);
+
+            Assert.That(
+                interpolatorType,
+                Is.Not.Null);
+
+            var bootstrapObject =
+                new GameObject(
+                    "Remote State Consumer Test");
+
+            var remotePlayer =
+                new GameObject(
+                    "Remote Player Consumer Test");
+
+            bootstrapObject.SetActive(false);
+            remotePlayer.SetActive(false);
+
+            try
+            {
+                Component bootstrap =
+                    bootstrapObject.AddComponent(
+                        bootstrapType);
+
+                Component interpolator =
+                    remotePlayer.AddComponent(
+                        interpolatorType);
+
+                MethodInfo configureMethod =
+                    interpolatorType.GetMethod(
+                        "Configure",
+                        BindingFlags.Instance |
+                        BindingFlags.Public);
+
+                Assert.That(
+                    configureMethod,
+                    Is.Not.Null);
+
+                configureMethod.Invoke(
+                    interpolator,
+                    new object[]
+                    {
+                        11u
+                    });
+
+                SetPrivateField(
+                    bootstrap,
+                    "remotePlayer",
+                    remotePlayer);
+
+                InvokePrivate(
+                    bootstrap,
+                    "Awake");
+
+                var snapshot =
+                    new PlayerStateSnapshotPayload(
+                        new[]
+                        {
+                    new PlayerStateRecord(
+                        11u,
+                        8f,
+                        -3f,
+                        1f,
+                        0f)
+                        });
+
+                InvokePrivate(
+                    bootstrap,
+                    "HandleRemotePlayerStateSnapshot",
+                    11u,
+                    snapshot);
+
+                MethodInfo advanceMethod =
+                    interpolatorType.GetMethod(
+                        "Advance",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    advanceMethod,
+                    Is.Not.Null);
+
+                advanceMethod.Invoke(
+                    interpolator,
+                    new object[]
+                    {
+                0.05f
+                    });
+
+                Assert.That(
+                    remotePlayer.transform.position.x,
+                    Is.EqualTo(8f).Within(0.01f));
+
+                Assert.That(
+                    remotePlayer.transform.position.y,
+                    Is.EqualTo(-3f).Within(0.01f));
+
+                Assert.That(
+                    remotePlayer.transform.eulerAngles.z,
+                    Is.EqualTo(0f).Within(0.01f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    bootstrapObject);
+
+                UnityEngine.Object.DestroyImmediate(
+                    remotePlayer);
+            }
+        }
+
+        [Test]
+        public void TryConfigureClientInputPublisher_AttachesConfiguredPublisher()
+        {
+            Type bootstrapType =
+                FindType(BootstrapTypeName);
+
+            Type localInputType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Characters." +
+                    "LocalPlayerInputSource");
+
+            Type publisherType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "ClientPlayerInputPublisher");
+
+            Assert.That(bootstrapType, Is.Not.Null);
+            Assert.That(localInputType, Is.Not.Null);
+            Assert.That(publisherType, Is.Not.Null);
+
+            var bootstrapObject =
+                new GameObject("Bootstrap Test");
+
+            var playerObject =
+                new GameObject("Client Player Test");
+
+            bootstrapObject.SetActive(false);
+            playerObject.SetActive(false);
+
+            try
+            {
+                Component bootstrap =
+                    bootstrapObject.AddComponent(
+                        bootstrapType);
+
+                Component localInput =
+                    playerObject.AddComponent(
+                        localInputType);
+
+                Action<PlayerInputPayload> sender =
+                    _ => { };
+
+                MethodInfo configureMethod =
+                    bootstrapType.GetMethod(
+                        "TryConfigureClientInputPublisher",
+                        BindingFlags.Static |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    configureMethod,
+                    Is.Not.Null,
+                    "TryConfigureClientInputPublisher must exist.");
+
+                object result =
+                    configureMethod.Invoke(
+                        null,
+                        new object[]
+                        {
+                            playerObject,
+                            sender
+                        });
+
+                Assert.That(
+                    result,
+                    Is.EqualTo(true));
+
+                Component publisher =
+                    playerObject.GetComponent(
+                        publisherType);
+
+                Assert.That(
+                    publisher,
+                    Is.Not.Null);
+
+                Assert.That(
+                    ((Behaviour)publisher).enabled,
+                    Is.True);
+
+                FieldInfo inputSourceField =
+                    publisherType.GetField(
+                        "inputSource",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                FieldInfo senderField =
+                    publisherType.GetField(
+                        "sendInput",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    inputSourceField,
+                    Is.Not.Null);
+
+                Assert.That(
+                    senderField,
+                    Is.Not.Null);
+
+                Assert.That(
+                    inputSourceField.GetValue(
+                        publisher),
+                    Is.SameAs(localInput));
+
+                Assert.That(
+                    senderField.GetValue(
+                        publisher),
+                    Is.Not.Null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    bootstrapObject);
+
+                UnityEngine.Object.DestroyImmediate(
+                    playerObject);
             }
         }
 
@@ -742,6 +1592,29 @@ namespace TopDownRoguelike.Tests.EditMode
                 healthText);
 
             return healthBarView;
+        }
+
+        private static Vector2 ReadVector2Property(
+            Component target,
+            string propertyName)
+        {
+            Assert.That(
+                target,
+                Is.Not.Null);
+
+            PropertyInfo property =
+                target.GetType().GetProperty(
+                    propertyName,
+                    BindingFlags.Instance |
+                    BindingFlags.Public);
+
+            Assert.That(
+                property,
+                Is.Not.Null,
+                $"{propertyName} must exist.");
+
+            return (Vector2)property.GetValue(
+                target);
         }
 
         private static void SetPrivateField(

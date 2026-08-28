@@ -24,7 +24,9 @@ namespace tdr::net
         udpSocket_(udpSocket),
         coordinator_(coordinator),
         udpBindHandler_(coordinator),
-        udpPingHandler_(coordinator)
+        udpPingHandler_(coordinator),
+        playerInputForwarder_(coordinator),
+        playerStateForwarder_(coordinator)
     {
         if (!listener_.IsListening())
         {
@@ -90,6 +92,9 @@ namespace tdr::net
 
                 std::vector<std::uint8_t> response;
 
+                sockaddr_in6 responseDestination =
+                    sourceAddress;
+
                 try
                 {
                     const auto packet =
@@ -118,6 +123,44 @@ namespace tdr::net
                             );
                         break;
 
+                    case tdr::protocol::MessageType::PlayerInput:
+                    {
+                        auto forwarded =
+                            playerInputForwarder_.Forward(
+                                receiveBuffer.data(),
+                                receivedByteCount,
+                                sourceAddress
+                            );
+
+                        response =
+                            std::move(forwarded.bytes);
+
+                        responseDestination =
+                            forwarded.destination;
+
+                        break;
+                    }
+
+                    case tdr::protocol::MessageType::
+                    PlayerStateSnapshot:
+                    {
+                        auto forwarded =
+                            playerStateForwarder_.Forward(
+                                receiveBuffer.data(),
+                                receivedByteCount,
+                                sourceAddress
+                            );
+
+                        response =
+                            std::move(
+                                forwarded.bytes);
+
+                        responseDestination =
+                            forwarded.destination;
+
+                        break;
+                    }
+
                     default:
                         throw std::invalid_argument(
                             "Unsupported UDP message type."
@@ -141,7 +184,7 @@ namespace tdr::net
                     udpSocket_.SendTo(
                         response.data(),
                         response.size(),
-                        sourceAddress
+                        responseDestination
                     )
                 );
 

@@ -9,6 +9,9 @@ namespace TopDownRoguelike.Gameplay.Characters
         [SerializeField]
         private Camera mainCamera;
 
+        [SerializeField]
+        private KeyCode dashKey = KeyCode.Space;
+
         public Vector2 MoveDirection
         {
             get
@@ -61,6 +64,28 @@ namespace TopDownRoguelike.Gameplay.Characters
             get
             {
                 return Input.GetMouseButton(0);
+            }
+        }
+
+        public uint DashRequestSequence
+        {
+            get;
+            private set;
+        }
+
+        private void Update()
+        {
+            if (Input.GetKeyDown(dashKey))
+            {
+                RegisterDashRequest();
+            }
+        }
+
+        private void RegisterDashRequest()
+        {
+            unchecked
+            {
+                DashRequestSequence++;
             }
         }
 

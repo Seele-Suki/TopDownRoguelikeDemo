@@ -20,6 +20,12 @@ namespace TopDownRoguelike.Gameplay.Networking
             private set;
         }
 
+        public bool IsDashing
+        {
+            get;
+            private set;
+        }
+
         public void Configure(
             uint playerId)
         {
@@ -42,6 +48,9 @@ namespace TopDownRoguelike.Gameplay.Networking
                 false;
 
             IsFireHeld =
+                false;
+
+            IsDashing =
                 false;
 
             enabled =
@@ -84,6 +93,9 @@ namespace TopDownRoguelike.Gameplay.Networking
 
                 IsFireHeld =
                     state.FireHeld;
+
+                IsDashing =
+                    state.IsDashing;
 
                 hasTarget =
                     true;
@@ -141,6 +153,9 @@ namespace TopDownRoguelike.Gameplay.Networking
                 false;
 
             IsFireHeld =
+                false;
+
+            IsDashing =
                 false;
         }
     }

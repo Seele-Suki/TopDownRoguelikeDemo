@@ -7,6 +7,8 @@ namespace TopDownRoguelike.Gameplay.Networking
         : MonoBehaviour,
           IPlayerInputSource
     {
+        private bool hasDashRequestSequence;
+
         public Vector2 MoveDirection
         {
             get;
@@ -25,20 +27,40 @@ namespace TopDownRoguelike.Gameplay.Networking
             private set;
         }
 
+        public uint DashRequestSequence
+        {
+            get;
+            private set;
+        }
+
         public void ApplyInput(
             Vector2 moveDirection,
             Vector2 aimDirection)
         {
-            ApplyInputWithFireState(
+            ApplyInputState(
                 moveDirection,
                 aimDirection,
-                false);
+                false,
+                DashRequestSequence);
         }
 
         public void ApplyInputWithFireState(
             Vector2 moveDirection,
             Vector2 aimDirection,
             bool fireHeld)
+        {
+            ApplyInputState(
+                moveDirection,
+                aimDirection,
+                fireHeld,
+                DashRequestSequence);
+        }
+
+        public void ApplyInputState(
+            Vector2 moveDirection,
+            Vector2 aimDirection,
+            bool fireHeld,
+            uint dashRequestSequence)
         {
             MoveDirection =
                 NormalizeIfNeeded(
@@ -50,6 +72,18 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             IsFireHeld =
                 fireHeld;
+
+            if (!hasDashRequestSequence ||
+                IsNewerSequence(
+                    dashRequestSequence,
+                    DashRequestSequence))
+            {
+                DashRequestSequence =
+                    dashRequestSequence;
+
+                hasDashRequestSequence =
+                    true;
+            }
         }
 
         public void ClearInput()
@@ -62,6 +96,25 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             IsFireHeld =
                 false;
+
+            DashRequestSequence =
+                0u;
+
+            hasDashRequestSequence =
+                false;
+        }
+
+        private static bool IsNewerSequence(
+            uint candidate,
+            uint baseline)
+        {
+            uint difference =
+                unchecked(
+                    candidate -
+                    baseline);
+
+            return difference != 0u &&
+                difference < 0x80000000u;
         }
 
         private static Vector2 NormalizeIfNeeded(

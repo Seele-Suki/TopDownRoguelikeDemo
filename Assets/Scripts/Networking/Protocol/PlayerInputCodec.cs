@@ -5,17 +5,20 @@ namespace TopDownRoguelike.Networking.Protocol
     public sealed class PlayerInputPayload
     {
         public PlayerInputPayload(
-            float moveX,
-            float moveY,
-            float aimX,
-            float aimY,
-            bool fireHeld = false)
+    float moveX,
+    float moveY,
+    float aimX,
+    float aimY,
+    bool fireHeld = false,
+    uint dashRequestSequence = 0u)
         {
             MoveX = moveX;
             MoveY = moveY;
             AimX = aimX;
             AimY = aimY;
             FireHeld = fireHeld;
+            DashRequestSequence =
+                dashRequestSequence;
         }
 
         public float MoveX { get; }
@@ -23,17 +26,19 @@ namespace TopDownRoguelike.Networking.Protocol
         public float AimX { get; }
         public float AimY { get; }
         public bool FireHeld { get; }
+        public uint DashRequestSequence { get; }
     }
 
     public static class PlayerInputCodec
     {
-        public const int PayloadSize = 20;
+        public const int PayloadSize = 24;
 
         private const int MoveXOffset = 0;
         private const int MoveYOffset = 4;
         private const int AimXOffset = 8;
         private const int AimYOffset = 12;
         private const int FlagsOffset = 16;
+        private const int DashRequestSequenceOffset = 20;
         private const uint FireHeldFlag = 1u;
         private const uint KnownFlags = FireHeldFlag;
 
@@ -80,6 +85,11 @@ namespace TopDownRoguelike.Networking.Protocol
                 FlagsOffset,
                 flags);
 
+            PacketCodec.WriteNetworkUInt32(
+                payload,
+                DashRequestSequenceOffset,
+                input.DashRequestSequence);
+
             return payload;
         }
 
@@ -119,7 +129,10 @@ namespace TopDownRoguelike.Networking.Protocol
                 ReadNetworkFloat(payload, MoveYOffset),
                 ReadNetworkFloat(payload, AimXOffset),
                 ReadNetworkFloat(payload, AimYOffset),
-                fireHeld);
+                fireHeld,
+                PacketCodec.ReadNetworkUInt32(
+                    payload,
+                    DashRequestSequenceOffset));
 
             Validate(input);
 

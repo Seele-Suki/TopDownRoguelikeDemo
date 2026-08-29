@@ -150,6 +150,10 @@ namespace tdr::protocol
             encoded,
             input.flags & kKnownFlags
         );
+        AppendNetwork32(
+            encoded,
+            input.dashRequestSequence
+        );
 
         return encoded;
     }
@@ -190,6 +194,9 @@ namespace tdr::protocol
             ReadNetworkFloat(data, offset);
 
         input.flags =
+            ReadNetwork32(data, offset);
+
+        input.dashRequestSequence =
             ReadNetwork32(data, offset);
 
         if ((input.flags & ~kKnownFlags) != 0U)

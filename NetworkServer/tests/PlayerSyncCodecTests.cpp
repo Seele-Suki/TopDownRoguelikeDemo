@@ -64,6 +64,9 @@ namespace
             0xBFU, 0x80U, 0x00U, 0x00U,
 
             // Flags: FireHeld is not set
+            0x00U, 0x00U, 0x00U, 0x00U,
+
+            // DashRequestSequence: no request yet
             0x00U, 0x00U, 0x00U, 0x00U
         };
 
@@ -101,6 +104,52 @@ namespace
         Require(
             decoded.aimY == original.aimY,
             "Decoded aim Y did not match."
+        );
+
+        Require(
+            decoded.dashRequestSequence ==
+            original.dashRequestSequence,
+            "Decoded dash request sequence did not match."
+        );
+    }
+
+    void PlayerInputCarriesDashRequestSequence()
+    {
+        using namespace tdr::protocol;
+
+        const std::vector<std::uint8_t> expected{
+            // Move X: 0.5F
+            0x3FU, 0x00U, 0x00U, 0x00U,
+
+            // Move Y: -0.25F
+            0xBEU, 0x80U, 0x00U, 0x00U,
+
+            // Aim X: 1.0F
+            0x3FU, 0x80U, 0x00U, 0x00U,
+
+            // Aim Y: -1.0F
+            0xBFU, 0x80U, 0x00U, 0x00U,
+
+            // Flags: bit 0 = FireHeld
+            0x00U, 0x00U, 0x00U, 0x01U,
+
+            // DashRequestSequence: 0x01020304
+            0x01U, 0x02U, 0x03U, 0x04U
+        };
+
+        const PlayerInputPayload decoded =
+            PlayerInputCodec::Decode(
+                expected.data(),
+                expected.size()
+            );
+
+        const auto reencoded =
+            PlayerInputCodec::Encode(decoded);
+
+        Require(
+            reencoded == expected,
+            "Player input did not preserve the "
+            "dash request sequence."
         );
     }
 
@@ -233,7 +282,7 @@ namespace
                 static_cast<void>(
                     PlayerInputCodec::Decode(
                         nullptr,
-                        20U
+                        kPlayerInputPayloadSize
                     )
                     );
             },
@@ -268,7 +317,7 @@ namespace
                 -2.25F,
                 0.0F,
                 1.0F,
-                1U
+                3U
             }
         );
 
@@ -286,8 +335,8 @@ namespace
             0x00U, 0x00U, 0x00U, 0x00U,
             // Aim Y: 1
             0x3FU, 0x80U, 0x00U, 0x00U,
-            // Flags: FireHeld
-            0x00U, 0x00U, 0x00U, 0x01U,
+            // Flags: FireHeld | IsDashing
+            0x00U, 0x00U, 0x00U, 0x03U,
 
             // Player ID: 0x01020304
             0x01U, 0x02U, 0x03U, 0x04U,
@@ -336,8 +385,8 @@ namespace
         );
 
         Require(
-            decoded.players[0].flags == 1U,
-            "Decoded first player FireHeld flag did not match."
+            decoded.players[0].flags == 3U,
+            "Decoded first player action flags did not match."
         );
 
         Require(
@@ -406,7 +455,7 @@ namespace
         );
 
         auto unknownFlags = encoded;
-        unknownFlags[27] = 2U;
+        unknownFlags[27] = 4U;
 
         RequireInvalidArgument(
             [&unknownFlags]()
@@ -631,6 +680,8 @@ int main()
     try
     {
         PlayerInputUsesStableWireLayout();
+
+        PlayerInputCarriesDashRequestSequence();
 
         PlayerInputRejectsInvalidValues();
         PlayerInputRejectsMalformedPayloads();

@@ -93,13 +93,17 @@ namespace TopDownRoguelike.Gameplay.Networking
             bool fireHeld =
                 inputSource.IsFireHeld;
 
+            uint dashRequestSequence =
+                inputSource.DashRequestSequence;
+
             sendInput(
                 new PlayerInputPayload(
                     movement.x,
                     movement.y,
                     aim.x,
                     aim.y,
-                    fireHeld));
+                    fireHeld,
+                    dashRequestSequence));
         }
 
         private void OnDisable()

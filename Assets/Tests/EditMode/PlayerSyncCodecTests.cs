@@ -17,13 +17,25 @@ namespace TopDownRoguelike.Tests.EditMode
                 -1.0f);
 
             var expected = new byte[]
-            {
+{
+                // Move X: 0.5
                 0x3F, 0x00, 0x00, 0x00,
+
+                // Move Y: -0.25
                 0xBE, 0x80, 0x00, 0x00,
+
+                // Aim X: 1
                 0x3F, 0x80, 0x00, 0x00,
+
+                // Aim Y: -1
                 0xBF, 0x80, 0x00, 0x00,
+
+                // Flags: FireHeld is not set
+                0x00, 0x00, 0x00, 0x00,
+
+                // DashRequestSequence: no request yet
                 0x00, 0x00, 0x00, 0x00
-            };
+};
 
             byte[] encoded =
                 PlayerInputCodec.Encode(original);
@@ -37,6 +49,9 @@ namespace TopDownRoguelike.Tests.EditMode
             Assert.That(decoded.MoveY, Is.EqualTo(-0.25f));
             Assert.That(decoded.AimX, Is.EqualTo(1.0f));
             Assert.That(decoded.AimY, Is.EqualTo(-1.0f));
+            Assert.That(
+                decoded.DashRequestSequence,
+                Is.EqualTo(0u));
         }
 
         [Test]
@@ -99,17 +114,19 @@ namespace TopDownRoguelike.Tests.EditMode
                 payloadType.GetConstructor(
                     new[]
                     {
-                typeof(float),
-                typeof(float),
-                typeof(float),
-                typeof(float),
-                typeof(bool)
+                                    typeof(float),
+                                    typeof(float),
+                                    typeof(float),
+                                    typeof(float),
+                                    typeof(bool),
+                                    typeof(uint)
                     });
 
             Assert.That(
                 constructor,
                 Is.Not.Null,
-                "PlayerInputPayload must accept FireHeld.");
+                "PlayerInputPayload must accept " +
+                "FireHeld and DashRequestSequence.");
         }
 
         [TestCase(1.1f, 0.0f)]
@@ -160,18 +177,18 @@ namespace TopDownRoguelike.Tests.EditMode
             Assert.Throws<ArgumentException>(
                 () =>
                     PlayerInputCodec.Decode(
-                        new byte[19]));
+                        new byte[PlayerInputCodec.PayloadSize - 1]));
 
             Assert.Throws<ArgumentException>(
                 () =>
                     PlayerInputCodec.Decode(
-                        new byte[21]));
+                        new byte[PlayerInputCodec.PayloadSize + 1]));
         }
 
         [Test]
         public void PlayerInputDecodeUnknownFlags_RejectsPayload()
         {
-            var payload = new byte[20];
+            var payload = new byte[PlayerInputCodec.PayloadSize];
 
             payload[8] = 0x3F;
             payload[9] = 0x80;
@@ -186,7 +203,7 @@ namespace TopDownRoguelike.Tests.EditMode
         [Test]
         public void PlayerInputDecodeNonFiniteValue_RejectsPayload()
         {
-            var payload = new byte[20];
+            var payload = new byte[PlayerInputCodec.PayloadSize];
 
             // Aim X = positive infinity.
             payload[8] = 0x7F;
@@ -373,8 +390,8 @@ namespace TopDownRoguelike.Tests.EditMode
             payload[16] = 0x3F;
             payload[17] = 0x80;
 
-            // Unknown flags: bit 1 is not defined
-            payload[27] = 2;
+            // Unknown flags: bit 2 is not defined
+            payload[27] = 4;
 
             Assert.Throws<ArgumentException>(
                 () =>

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using TopDownRoguelike.Gameplay.Characters;
 using TopDownRoguelike.Gameplay.Skills;
@@ -7,7 +8,6 @@ public class DashSkill : MonoBehaviour
 {
     [Header("Configuration")]
     [SerializeField] private DashData dashData;
-    [SerializeField] private KeyCode dashKey = KeyCode.Space;
 
     [Header("Runtime Debug")]
     [SerializeField] private float cooldownRemaining;
@@ -16,6 +16,8 @@ public class DashSkill : MonoBehaviour
     private float dashDuration;
     private float dashCooldown;
     private PlayerHealth playerHealth;
+    private IPlayerInputSource inputSource;
+    private uint lastProcessedDashRequestSequence;
 
     public bool IsDashing { get; private set; }
     public bool IsReady => !IsDashing && cooldownRemaining <= 0f;
@@ -32,6 +34,21 @@ public class DashSkill : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         playerController = GetComponent<PlayerController>();
         playerHealth = GetComponent<PlayerHealth>();
+        inputSource = GetComponent<IPlayerInputSource>();
+
+        if (inputSource == null)
+        {
+            Debug.LogError(
+                "DashSkill requires an " +
+                "IPlayerInputSource component.",
+                this);
+
+            enabled = false;
+            return;
+        }
+
+        lastProcessedDashRequestSequence =
+            inputSource.DashRequestSequence;
 
         if (playerHealth == null)
         {
@@ -64,6 +81,9 @@ public class DashSkill : MonoBehaviour
 
     private void Update()
     {
+        bool hasDashRequest =
+            TryConsumeDashRequest();
+
         if (Time.timeScale <= 0f ||
             (playerHealth != null && playerHealth.IsDead))
         {
@@ -73,13 +93,62 @@ public class DashSkill : MonoBehaviour
         if (cooldownRemaining > 0f)
         {
             cooldownRemaining =
-                Mathf.Max(0f, cooldownRemaining - Time.deltaTime);
+                Mathf.Max(
+                    0f,
+                    cooldownRemaining - Time.deltaTime);
         }
 
-        if (Input.GetKeyDown(dashKey) && IsReady)
+        if (hasDashRequest && IsReady)
         {
-            StartCoroutine(DashCoroutine());
+            StartCoroutine(
+                DashCoroutine());
         }
+    }
+
+    public void SetInputSource(
+    IPlayerInputSource newInputSource)
+    {
+        if (newInputSource == null)
+        {
+            throw new ArgumentNullException(
+                nameof(newInputSource));
+        }
+
+        inputSource =
+            newInputSource;
+
+        lastProcessedDashRequestSequence =
+            inputSource.DashRequestSequence;
+
+        enabled =
+            true;
+    }
+
+    private bool TryConsumeDashRequest()
+    {
+        if (inputSource == null)
+        {
+            return false;
+        }
+
+        uint currentSequence =
+            inputSource.DashRequestSequence;
+
+        uint difference =
+            unchecked(
+                currentSequence -
+                lastProcessedDashRequestSequence);
+
+        if (difference == 0u ||
+            difference >= 0x80000000u)
+        {
+            return false;
+        }
+
+        lastProcessedDashRequestSequence =
+            currentSequence;
+
+        return true;
     }
 
     private IEnumerator DashCoroutine()
@@ -165,30 +234,25 @@ public class DashSkill : MonoBehaviour
 
     private Vector2 GetDashDirection()
     {
-        Vector2 inputDirection = new Vector2(
-            Input.GetAxisRaw("Horizontal"),
-            Input.GetAxisRaw("Vertical")
-        );
-
-        // 优先使用键盘移动方向。
-        if (inputDirection.sqrMagnitude > 0.01f)
+        if (inputSource == null)
         {
-            return inputDirection.normalized;
+            return Vector2.zero;
         }
 
-        // 没有移动输入时，朝鼠标方向冲刺。
-        if (Camera.main != null)
+        Vector2 movement =
+            inputSource.MoveDirection;
+
+        if (movement.sqrMagnitude > 0.01f)
         {
-            Vector3 mouseWorldPosition =
-                Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            return movement.normalized;
+        }
 
-            Vector2 mouseDirection =
-                (Vector2)mouseWorldPosition - rb.position;
+        Vector2 aim =
+            inputSource.AimDirection;
 
-            if (mouseDirection.sqrMagnitude > 0.01f)
-            {
-                return mouseDirection.normalized;
-            }
+        if (aim.sqrMagnitude > 0.01f)
+        {
+            return aim.normalized;
         }
 
         return Vector2.zero;

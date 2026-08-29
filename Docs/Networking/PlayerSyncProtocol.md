@@ -17,7 +17,7 @@ the existing 32-byte UDP message header.
 - Float bits are transferred in network byte order.
 - Native C++ struct memory must never be sent directly.
 - Boolean values and compiler padding are not allowed.
-- Reserved fields must be encoded as zero.
+- Flag fields may contain only documented bits; all reserved bits must be zero.
 - All decoded floating-point values must be finite.
 
 ## Existing UDP Header
@@ -72,7 +72,7 @@ During Phase 5:
 The UDP header player ID identifies the player whose input is described.
 The payload does not repeat the player ID or sequence number.
 
-Fixed payload size: 20 bytes.
+Fixed payload size: 24 bytes.
 
 | Payload offset | Size | Type | Field |
 | ---: | ---: | --- | --- |
@@ -80,9 +80,10 @@ Fixed payload size: 20 bytes.
 | 4 | 4 | float32 | Move Y |
 | 8 | 4 | float32 | Aim X |
 | 12 | 4 | float32 | Aim Y |
-| 16 | 4 | uint32 | Reserved |
+| 16 | 4 | uint32 | Input flags |
+| 20 | 4 | uint32 | Dash request sequence |
 
-Total datagram size: 52 bytes.
+Total datagram size: 56 bytes.
 
 Movement rules:
 
@@ -98,9 +99,27 @@ Aim rules:
 - A non-zero aim vector is normalized by the receiver before use.
 - The payload contains direction, not mouse coordinates.
 
-The reserved field is zero during movement-and-aim synchronization.
-It may be assigned input-button flags in a later Phase 5 step without
-changing the payload size.
+Input flag rules:
+
+- Bit 0 is `FireHeld`.
+- Bits 1 through 31 are reserved and must be zero.
+
+Dash request sequence rules:
+
+- The sequence starts at zero before any dash request.
+- Each local dash press increments the sequence once.
+- The latest value persists across later input packets.
+- The server validates the UDP sender and forwards the value unchanged.
+- Gameplay acceptance and cooldown validation belong to the authoritative host.
+
+- The host keeps the first observed dash request sequence as its baseline.
+- Duplicate, older, and ambiguous half-range dash request sequences do not
+  replace the host's current dash request sequence.
+- Rejecting a dash request sequence does not discard movement, aim, or fire
+  state from the same accepted gameplay input packet.
+- A request observed during cooldown is consumed and is not queued for later
+  execution.
+- Sequence wrap from `0xFFFFFFFF` to `0` is accepted.
 
 ## PlayerStateSnapshot Payload
 
@@ -127,7 +146,7 @@ Each player record has a fixed size of 24 bytes.
 | 8 | 4 | float32 | Position Y |
 | 12 | 4 | float32 | Aim X |
 | 16 | 4 | float32 | Aim Y |
-| 20 | 4 | uint32 | Reserved |
+| 20 | 4 | uint32 | State flags |
 
 Payload size formula:
 
@@ -154,10 +173,9 @@ Snapshot validation rules:
 - Non-zero aim vectors are normalized by the receiver.
 - Payload size must exactly match the record count.
 - Trailing or missing bytes are rejected.
-- Reserved fields must be zero.
-
-The reserved record field may be assigned authoritative action-state flags
-in a later Phase 5 step without changing the record size.
+- Bit 0 of state flags is `FireHeld`.
+- Bit 1 of state flags is authoritative `IsDashing`.
+- Bits 2 through 31 are reserved and must be zero.
 
 ## Authority Rules
 
@@ -172,8 +190,6 @@ in a later Phase 5 step without changing the record size.
 
 This layout does not yet assign bits for:
 
-- Primary fire
-- Dash
 - Shotgun
 - Damage
 - Health
@@ -182,5 +198,5 @@ This layout does not yet assign bits for:
 - Upgrades
 - Boss state
 
-The two reserved fields remain zero until their semantics are explicitly
-defined and tested in later Phase 5 steps.
+Unassigned state-flag bits remain zero until their semantics are explicitly
+defined and tested in later phases.

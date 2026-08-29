@@ -9,5 +9,7 @@ namespace TopDownRoguelike.Gameplay.Characters
         Vector2 AimDirection { get; }
 
         bool IsFireHeld { get; }
+
+        uint DashRequestSequence { get; }
     }
 }

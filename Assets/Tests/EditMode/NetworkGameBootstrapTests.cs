@@ -641,10 +641,27 @@ namespace TopDownRoguelike.Tests.EditMode
                     "TopDownRoguelike.Gameplay.Networking." +
                     "RemotePlayerInterpolator");
 
+            Type localInputSourceType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Characters." +
+                    "LocalPlayerInputSource");
+
+            Type playerControllerType =
+                FindType(
+                    "PlayerController");
+
             Assert.That(bootstrapType, Is.Not.Null);
 
             Assert.That(
                 interpolatorType,
+                Is.Not.Null);
+
+            Assert.That(
+                localInputSourceType,
+                Is.Not.Null);
+
+            Assert.That(
+                playerControllerType,
                 Is.Not.Null);
 
             var bootstrapObject =
@@ -652,6 +669,14 @@ namespace TopDownRoguelike.Tests.EditMode
 
             var scenePlayer =
                 new GameObject("Scene Player");
+
+            scenePlayer.AddComponent<Rigidbody2D>();
+
+            scenePlayer.AddComponent(
+                localInputSourceType);
+
+            scenePlayer.AddComponent(
+                playerControllerType);
 
             var hostSpawnObject =
                 new GameObject("Host Spawn Point");

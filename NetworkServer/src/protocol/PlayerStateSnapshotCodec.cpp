@@ -11,7 +11,11 @@
 namespace
 {
     constexpr std::uint32_t kFireHeldFlag = 1U;
-    constexpr std::uint32_t kKnownFlags = kFireHeldFlag;
+    constexpr std::uint32_t kIsDashingFlag = 1U << 1U;
+
+    constexpr std::uint32_t kKnownFlags =
+        kFireHeldFlag |
+        kIsDashingFlag;
 
     using tdr::protocol::PlayerStateRecord;
 

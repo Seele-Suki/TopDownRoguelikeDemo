@@ -379,11 +379,28 @@ namespace TopDownRoguelike.Gameplay.Networking
             createdRemotePlayer.name =
                 "HostPlayer";
 
+            DisableComponent<DashSkill>(
+                scenePlayer);
+
             DisableLocalControl(
                 createdRemotePlayer);
 
+            if (!TryConfigureLocalDashReconciler(
+                    scenePlayer,
+                    localPlayerId))
+            {
+                DestroyPlayer(
+                    createdRemotePlayer);
+
+                FailConfiguration(
+                    "The local client dash reconciler " +
+                    "could not be configured.");
+
+                return;
+            }
+
             if (!registry.TryRegister(
-                    localPlayerId,
+                localPlayerId,
                     scenePlayer) ||
                 !registry.TryRegister(
                     hostPlayerId,
@@ -708,14 +725,15 @@ namespace TopDownRoguelike.Gameplay.Networking
                 return;
             }
 
-            inputSource.ApplyInputWithFireState(
+            inputSource.ApplyInputState(
                 new Vector2(
                     input.MoveX,
                     input.MoveY),
                 new Vector2(
                     input.AimX,
                     input.AimY),
-                input.FireHeld);
+                input.FireHeld,
+                input.DashRequestSequence);
         }
 
         private void HandleRemotePlayerStateSnapshot(
@@ -730,9 +748,17 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             if (remotePlayer != null &&
                 remotePlayer.TryGetComponent(
-                    out RemotePlayerInterpolator interpolator))
+                out RemotePlayerInterpolator interpolator))
             {
                 interpolator.ApplySnapshot(
+                    snapshot);
+            }
+
+            if (localPlayer != null &&
+                localPlayer.TryGetComponent(
+                    out LocalPlayerDashReconciler reconciler))
+            {
+                reconciler.ApplySnapshot(
                     snapshot);
             }
 
@@ -778,6 +804,36 @@ namespace TopDownRoguelike.Gameplay.Networking
             receiver.Enqueue(
                 playerId,
                 shotEvent);
+        }
+
+        private static bool TryConfigureLocalDashReconciler(
+            GameObject player,
+            uint localPlayerId)
+        {
+            if (player == null ||
+                localPlayerId == 0u ||
+                !player.TryGetComponent(
+                    out PlayerController controller))
+            {
+                return false;
+            }
+
+            LocalPlayerDashReconciler reconciler =
+                player.GetComponent<
+                    LocalPlayerDashReconciler>();
+
+            if (reconciler == null)
+            {
+                reconciler =
+                    player.AddComponent<
+                        LocalPlayerDashReconciler>();
+            }
+
+            reconciler.Configure(
+                localPlayerId);
+
+            return reconciler.enabled &&
+                controller != null;
         }
 
         private static bool TryConfigureRemoteInterpolator(
@@ -1032,11 +1088,20 @@ namespace TopDownRoguelike.Gameplay.Networking
                 return false;
             }
 
+            DashSkill dashSkill =
+                player.GetComponent<DashSkill>();
+
             controller.SetInputSource(
                 inputSource);
 
             shooter.SetInputSource(
                 inputSource);
+
+            if (dashSkill != null)
+            {
+                dashSkill.SetInputSource(
+                    inputSource);
+            }
 
             return true;
         }

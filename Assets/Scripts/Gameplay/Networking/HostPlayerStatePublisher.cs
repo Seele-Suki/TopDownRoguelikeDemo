@@ -104,6 +104,11 @@ namespace TopDownRoguelike.Gameplay.Networking
                         out IPlayerInputSource inputSource) &&
                     inputSource.IsFireHeld;
 
+                bool isDashing =
+                    player.TryGetComponent(
+                        out DashSkill dashSkill) &&
+                    dashSkill.IsDashing;
+
                 playerStates.Add(
                     new PlayerStateRecord(
                         playerId,
@@ -111,7 +116,8 @@ namespace TopDownRoguelike.Gameplay.Networking
                         position.y,
                         aim.x,
                         aim.y,
-                        fireHeld));
+                        fireHeld,
+                        isDashing));
             }
 
             elapsedSeconds %=

@@ -12,6 +12,25 @@ namespace TopDownRoguelike.Networking.Protocol
             float aimX,
             float aimY,
             bool fireHeld = false)
+            : this(
+                playerId,
+                positionX,
+                positionY,
+                aimX,
+                aimY,
+                fireHeld,
+                false)
+        {
+        }
+
+        public PlayerStateRecord(
+            uint playerId,
+            float positionX,
+            float positionY,
+            float aimX,
+            float aimY,
+            bool fireHeld,
+            bool isDashing)
         {
             PlayerId = playerId;
             PositionX = positionX;
@@ -19,6 +38,7 @@ namespace TopDownRoguelike.Networking.Protocol
             AimX = aimX;
             AimY = aimY;
             FireHeld = fireHeld;
+            IsDashing = isDashing;
         }
 
         public uint PlayerId { get; }
@@ -27,6 +47,7 @@ namespace TopDownRoguelike.Networking.Protocol
         public float AimX { get; }
         public float AimY { get; }
         public bool FireHeld { get; }
+        public bool IsDashing { get; }
     }
 
     public sealed class PlayerStateSnapshotPayload
@@ -67,7 +88,10 @@ namespace TopDownRoguelike.Networking.Protocol
 
         private const int FlagsOffset = 20;
         private const uint FireHeldFlag = 1u;
-        private const uint KnownFlags = FireHeldFlag;
+        private const uint IsDashingFlag = 1u << 1;
+        private const uint KnownFlags =
+            FireHeldFlag |
+            IsDashingFlag;
 
         public static byte[] Encode(
             PlayerStateSnapshotPayload snapshot)
@@ -141,10 +165,17 @@ namespace TopDownRoguelike.Networking.Protocol
                     offset + 16,
                     player.AimY);
 
-                uint flags =
-                    player.FireHeld
-                        ? FireHeldFlag
-                        : 0u;
+                uint flags = 0u;
+
+                if (player.FireHeld)
+                {
+                    flags |= FireHeldFlag;
+                }
+
+                if (player.IsDashing)
+                {
+                    flags |= IsDashingFlag;
+                }
 
                 PacketCodec.WriteNetworkUInt32(
                     payload,
@@ -250,6 +281,9 @@ namespace TopDownRoguelike.Networking.Protocol
                 bool fireHeld =
                     (flags & FireHeldFlag) != 0u;
 
+                bool isDashing =
+                    (flags & IsDashingFlag) != 0u;
+
                 players.Add(
                     new PlayerStateRecord(
                         playerId,
@@ -257,7 +291,8 @@ namespace TopDownRoguelike.Networking.Protocol
                         positionY,
                         aimX,
                         aimY,
-                        fireHeld)
+                        fireHeld,
+                        isDashing)
                 );
 
                 offset += RecordSize;

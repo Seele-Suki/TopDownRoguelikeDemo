@@ -58,7 +58,10 @@ namespace TopDownRoguelike.Tests.EditMode
                 0x00, 0x00, 0x00, 0x01,
 
                 // DashRequestSequence: 0x01020304
-                0x01, 0x02, 0x03, 0x04
+                0x01, 0x02, 0x03, 0x04,
+
+                // ShotgunRequestSequence: no request yet
+                0x00, 0x00, 0x00, 0x00
             };
 
             byte[] encoded =
@@ -70,7 +73,7 @@ namespace TopDownRoguelike.Tests.EditMode
 
             Assert.That(
                 PlayerInputCodec.PayloadSize,
-                Is.EqualTo(24));
+                Is.EqualTo(28));
 
             PlayerInputPayload decoded =
                 PlayerInputCodec.Decode(encoded);

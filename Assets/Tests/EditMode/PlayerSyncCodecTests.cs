@@ -34,6 +34,9 @@ namespace TopDownRoguelike.Tests.EditMode
                 0x00, 0x00, 0x00, 0x00,
 
                 // DashRequestSequence: no request yet
+                0x00, 0x00, 0x00, 0x00,
+
+                // ShotgunRequestSequence: no request yet
                 0x00, 0x00, 0x00, 0x00
 };
 

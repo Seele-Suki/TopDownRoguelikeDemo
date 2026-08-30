@@ -5,20 +5,39 @@ namespace TopDownRoguelike.Networking.Protocol
     public sealed class PlayerInputPayload
     {
         public PlayerInputPayload(
-    float moveX,
-    float moveY,
-    float aimX,
-    float aimY,
-    bool fireHeld = false,
-    uint dashRequestSequence = 0u)
+            float moveX,
+            float moveY,
+            float aimX,
+            float aimY,
+            bool fireHeld = false,
+            uint dashRequestSequence = 0u)
+            : this(
+                moveX,
+                moveY,
+                aimX,
+                aimY,
+                fireHeld,
+                dashRequestSequence,
+                0u)
+        {
+        }
+
+        public PlayerInputPayload(
+            float moveX,
+            float moveY,
+            float aimX,
+            float aimY,
+            bool fireHeld,
+            uint dashRequestSequence,
+            uint shotgunRequestSequence)
         {
             MoveX = moveX;
             MoveY = moveY;
             AimX = aimX;
             AimY = aimY;
             FireHeld = fireHeld;
-            DashRequestSequence =
-                dashRequestSequence;
+            DashRequestSequence = dashRequestSequence;
+            ShotgunRequestSequence = shotgunRequestSequence;
         }
 
         public float MoveX { get; }
@@ -27,11 +46,12 @@ namespace TopDownRoguelike.Networking.Protocol
         public float AimY { get; }
         public bool FireHeld { get; }
         public uint DashRequestSequence { get; }
+        public uint ShotgunRequestSequence { get; }
     }
 
     public static class PlayerInputCodec
     {
-        public const int PayloadSize = 24;
+        public const int PayloadSize = 28;
 
         private const int MoveXOffset = 0;
         private const int MoveYOffset = 4;
@@ -39,6 +59,7 @@ namespace TopDownRoguelike.Networking.Protocol
         private const int AimYOffset = 12;
         private const int FlagsOffset = 16;
         private const int DashRequestSequenceOffset = 20;
+        private const int ShotgunRequestSequenceOffset = 24;
         private const uint FireHeldFlag = 1u;
         private const uint KnownFlags = FireHeldFlag;
 
@@ -90,6 +111,11 @@ namespace TopDownRoguelike.Networking.Protocol
                 DashRequestSequenceOffset,
                 input.DashRequestSequence);
 
+            PacketCodec.WriteNetworkUInt32(
+                payload,
+                ShotgunRequestSequenceOffset,
+                input.ShotgunRequestSequence);
+
             return payload;
         }
 
@@ -132,7 +158,10 @@ namespace TopDownRoguelike.Networking.Protocol
                 fireHeld,
                 PacketCodec.ReadNetworkUInt32(
                     payload,
-                    DashRequestSequenceOffset));
+                    DashRequestSequenceOffset),
+                PacketCodec.ReadNetworkUInt32(
+                    payload,
+                    ShotgunRequestSequenceOffset));
 
             Validate(input);
 

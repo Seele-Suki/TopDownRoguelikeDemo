@@ -44,6 +44,7 @@ namespace TopDownRoguelike.Gameplay.Networking
         private NetworkClient remoteInputClient;
         private NetworkClient stateSnapshotClient;
         private NetworkClient shotEventClient;
+        private NetworkClient shotgunEventClient;
 
         public NetworkPlayerRegistry Registry =>
             registry;
@@ -58,6 +59,11 @@ namespace TopDownRoguelike.Gameplay.Networking
             uint,
             PlayerStateSnapshotPayload>
             PlayerStateSnapshotReceived;
+
+        public event Action<
+            uint,
+            PlayerShotgunEvent>
+            PlayerShotgunEventReceived;
 
         private void Awake()
         {
@@ -189,6 +195,18 @@ namespace TopDownRoguelike.Gameplay.Networking
                         "The host shot publisher " +
                         "could not be configured.");
                 }
+
+                if (enabled &&
+                    !TryConfigureHostShotgunPublishers(
+                        localPlayerId,
+                        remotePlayerId,
+                        networkBehaviour.Client
+                            .SendPlayerShotgunEvent))
+                {
+                    FailConfiguration(
+                        "The host shotgun publishers " +
+                        "could not be configured.");
+                }
             }
         }
 
@@ -241,6 +259,9 @@ namespace TopDownRoguelike.Gameplay.Networking
                     networkBehaviour.Client);
 
                 SubscribeToRemoteShotEvents(
+                    networkBehaviour.Client);
+
+                SubscribeToRemoteShotgunEvents(
                     networkBehaviour.Client);
             }
 
@@ -382,6 +403,9 @@ namespace TopDownRoguelike.Gameplay.Networking
             DisableComponent<DashSkill>(
                 scenePlayer);
 
+            DisableComponent<ShotgunSkill>(
+                scenePlayer);
+
             DisableLocalControl(
                 createdRemotePlayer);
 
@@ -454,6 +478,26 @@ namespace TopDownRoguelike.Gameplay.Networking
                 return;
             }
 
+            if (!TryConfigureRemoteShotgunReceiver(
+                createdRemotePlayer,
+                hostPlayerId))
+            {
+                registry.Remove(
+                    localPlayerId);
+
+                registry.Remove(
+                    hostPlayerId);
+
+                DestroyPlayer(
+                    createdRemotePlayer);
+
+                FailConfiguration(
+                    "The remote shotgun receiver could " +
+                    "not be configured.");
+
+                return;
+            }
+
             if (remoteProjectileVisualPrefab == null)
             {
                 if (Application.isPlaying)
@@ -489,6 +533,26 @@ namespace TopDownRoguelike.Gameplay.Networking
 
                 FailConfiguration(
                     "The remote projectile visual spawner " +
+                    "could not be configured.");
+
+                return;
+            }
+
+            else if (!TryConfigureRemoteShotgunSpawner(
+             createdRemotePlayer,
+             remoteProjectileVisualPrefab))
+            {
+                registry.Remove(
+                    localPlayerId);
+
+                registry.Remove(
+                    hostPlayerId);
+
+                DestroyPlayer(
+                    createdRemotePlayer);
+
+                FailConfiguration(
+                    "The remote shotgun visual spawner " +
                     "could not be configured.");
 
                 return;
@@ -673,6 +737,30 @@ namespace TopDownRoguelike.Gameplay.Networking
                 HandleRemotePlayerShotEvent;
         }
 
+        private void SubscribeToRemoteShotgunEvents(
+            NetworkClient client)
+        {
+            if (client == null ||
+                shotgunEventClient == client)
+            {
+                return;
+            }
+
+            if (shotgunEventClient != null)
+            {
+                shotgunEventClient
+                    .PlayerShotgunEventReceived -=
+                    HandleRemotePlayerShotgunEvent;
+            }
+
+            shotgunEventClient =
+                client;
+
+            shotgunEventClient
+                .PlayerShotgunEventReceived +=
+                HandleRemotePlayerShotgunEvent;
+        }
+
         private void SubscribeToRemoteInput(
             NetworkClient client)
         {
@@ -733,7 +821,8 @@ namespace TopDownRoguelike.Gameplay.Networking
                     input.AimX,
                     input.AimY),
                 input.FireHeld,
-                input.DashRequestSequence);
+                input.DashRequestSequence,
+                input.ShotgunRequestSequence);
         }
 
         private void HandleRemotePlayerStateSnapshot(
@@ -804,6 +893,82 @@ namespace TopDownRoguelike.Gameplay.Networking
             receiver.Enqueue(
                 playerId,
                 shotEvent);
+        }
+
+        private void HandleRemotePlayerShotgunEvent(
+            uint senderPlayerId,
+            PlayerShotgunEvent shotgunEvent)
+        {
+            if (senderPlayerId == 0u ||
+                shotgunEvent == null ||
+                registry == null)
+            {
+                return;
+            }
+
+            uint targetPlayerId =
+                shotgunEvent.PlayerId;
+
+            if (targetPlayerId == 0u ||
+                !registry.TryGetPlayer(
+                    targetPlayerId,
+                    out GameObject targetPlayer) ||
+                targetPlayer == null)
+            {
+                return;
+            }
+
+            Debug.Log(
+                $"NetworkGameBootstrap: routed remote " +
+                $"shotgun event sender={senderPlayerId}, " +
+                $"player={targetPlayerId}, " +
+                $"sequence={shotgunEvent.VolleySequence}",
+                this);
+
+            if(!targetPlayer.TryGetComponent(
+                out RemotePlayerShotgunEventReceiver receiver))
+{
+                if (!TryConfigureRemoteShotgunReceiver(
+                        targetPlayer,
+                        targetPlayerId))
+                {
+                    Debug.LogError(
+                        "NetworkGameBootstrap: Player could not " +
+                        "be configured with a shotgun receiver.",
+                        this);
+
+                    return;
+                }
+
+                receiver =
+                    targetPlayer.GetComponent<
+                        RemotePlayerShotgunEventReceiver>();
+            }
+
+            if (!targetPlayer.TryGetComponent(
+                out RemoteShotgunVisualSpawner visualSpawner))
+            {
+                if (remoteProjectileVisualPrefab == null ||
+                    !TryConfigureRemoteShotgunSpawner(
+                        targetPlayer,
+                        remoteProjectileVisualPrefab))
+                {
+                    Debug.LogError(
+                        "NetworkGameBootstrap: Player could not " +
+                        "be configured with a shotgun visual spawner.",
+                        this);
+
+                    return;
+                }
+            }
+
+            receiver.Enqueue(
+                senderPlayerId,
+                shotgunEvent);
+
+            PlayerShotgunEventReceived?.Invoke(
+                targetPlayerId,
+                shotgunEvent);
         }
 
         private static bool TryConfigureLocalDashReconciler(
@@ -890,6 +1055,33 @@ namespace TopDownRoguelike.Gameplay.Networking
             return true;
         }
 
+        private bool TryConfigureRemoteShotgunReceiver(
+            GameObject player,
+            uint remotePlayerId)
+        {
+            if (player == null ||
+                remotePlayerId == 0u)
+            {
+                return false;
+            }
+
+            RemotePlayerShotgunEventReceiver receiver =
+                player.GetComponent<
+                    RemotePlayerShotgunEventReceiver>();
+
+            if (receiver == null)
+            {
+                receiver =
+                    player.AddComponent<
+                        RemotePlayerShotgunEventReceiver>();
+            }
+
+            receiver.Configure(
+                remotePlayerId);
+
+            return true;
+        }
+
         private static bool TryConfigureRemoteShotSpawner(
             GameObject player,
             GameObject visualPrefab)
@@ -918,6 +1110,44 @@ namespace TopDownRoguelike.Gameplay.Networking
                 spawner =
                     player.AddComponent<
                         RemoteProjectileVisualSpawner>();
+            }
+
+            spawner.Configure(
+                receiver,
+                visualPrefab);
+
+            return true;
+        }
+
+        private static bool
+            TryConfigureRemoteShotgunSpawner(
+                GameObject player,
+                GameObject visualPrefab)
+        {
+            if (player == null ||
+                visualPrefab == null)
+            {
+                return false;
+            }
+
+            RemotePlayerShotgunEventReceiver receiver =
+                player.GetComponent<
+                    RemotePlayerShotgunEventReceiver>();
+
+            if (receiver == null)
+            {
+                return false;
+            }
+
+            RemoteShotgunVisualSpawner spawner =
+                player.GetComponent<
+                    RemoteShotgunVisualSpawner>();
+
+            if (spawner == null)
+            {
+                spawner =
+                    player.AddComponent<
+                        RemoteShotgunVisualSpawner>();
             }
 
             spawner.Configure(
@@ -1011,6 +1241,100 @@ namespace TopDownRoguelike.Gameplay.Networking
             return true;
         }
 
+        private bool TryConfigureHostShotgunPublishers(
+            uint localPlayerId,
+            uint remotePlayerId,
+            Action<PlayerShotgunEvent>
+        sendShotgunEvent)
+        {
+            if (!GameSession.IsHost ||
+                localPlayer == null ||
+                remotePlayer == null ||
+                localPlayerId == 0u ||
+                remotePlayerId == 0u ||
+                localPlayerId == remotePlayerId ||
+                sendShotgunEvent == null)
+            {
+                return false;
+            }
+
+            if (!TryConfigurePlayerShotgunPublisher(
+                    localPlayer,
+                    localPlayerId,
+                    sendShotgunEvent))
+            {
+                return false;
+            }
+
+            if (!TryConfigurePlayerShotgunPublisher(
+                    remotePlayer,
+                    remotePlayerId,
+                    sendShotgunEvent))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool
+    TryConfigurePlayerShotgunPublisher(
+        GameObject player,
+        uint playerId,
+        Action<PlayerShotgunEvent>
+            sendShotgunEvent)
+        {
+            if (player == null ||
+                playerId == 0u ||
+                sendShotgunEvent == null)
+            {
+                return false;
+            }
+
+            ShotgunSkill shotgunSkill =
+                player.GetComponent<
+                    ShotgunSkill>();
+
+            if (shotgunSkill == null)
+            {
+                return false;
+            }
+
+            PlayerShotgunEventSource eventSource =
+                player.GetComponent<
+                    PlayerShotgunEventSource>();
+
+            if (eventSource == null)
+            {
+                eventSource =
+                    player.AddComponent<
+                        PlayerShotgunEventSource>();
+            }
+
+            eventSource.Configure(
+                playerId);
+
+            HostPlayerShotgunPublisher publisher =
+                player.GetComponent<
+                    HostPlayerShotgunPublisher>();
+
+            if (publisher == null)
+            {
+                publisher =
+                    player.AddComponent<
+                        HostPlayerShotgunPublisher>();
+            }
+
+            publisher.Configure(
+                eventSource,
+                sendShotgunEvent);
+
+            shotgunSkill.SetShotgunEventSource(
+                eventSource);
+
+            return true;
+        }
+
         private static bool
             TryConfigureClientInputPublisher(
                 GameObject player,
@@ -1091,6 +1415,9 @@ namespace TopDownRoguelike.Gameplay.Networking
             DashSkill dashSkill =
                 player.GetComponent<DashSkill>();
 
+            ShotgunSkill shotgunSkill =
+                player.GetComponent<ShotgunSkill>();
+
             controller.SetInputSource(
                 inputSource);
 
@@ -1100,6 +1427,12 @@ namespace TopDownRoguelike.Gameplay.Networking
             if (dashSkill != null)
             {
                 dashSkill.SetInputSource(
+                    inputSource);
+            }
+
+            if (shotgunSkill != null)
+            {
+                shotgunSkill.SetInputSource(
                     inputSource);
             }
 
@@ -1192,6 +1525,16 @@ namespace TopDownRoguelike.Gameplay.Networking
                     HandleRemotePlayerShotEvent;
 
                 shotEventClient =
+                    null;
+            }
+
+            if (shotgunEventClient != null)
+            {
+                shotgunEventClient
+                    .PlayerShotgunEventReceived -=
+                    HandleRemotePlayerShotgunEvent;
+
+                shotgunEventClient =
                     null;
             }
 

@@ -104,6 +104,11 @@ namespace TopDownRoguelike.Networking.Client
             PlayerShotEvent>
             PlayerShotEventReceived;
 
+        public event Action<
+            uint,
+            PlayerShotgunEvent>
+            PlayerShotgunEventReceived;
+
         public NetworkClientState State
         {
             get;
@@ -558,6 +563,44 @@ namespace TopDownRoguelike.Networking.Client
             }
         }
 
+        public void SendPlayerShotgunEvent(
+            PlayerShotgunEvent shotgunEvent)
+        {
+            ThrowIfDisposed();
+
+            if (State !=
+                NetworkClientState.InRoom)
+            {
+                throw new InvalidOperationException(
+                    "Network client must be in a room " +
+                    "before sending player shotgun event.");
+            }
+
+            byte[] payload =
+                PlayerShotgunEventCodec.Encode(
+                    shotgunEvent);
+
+            uint sequence =
+                nextUdpSequence;
+
+            nextUdpSequence =
+                unchecked(
+                    nextUdpSequence + 1u);
+
+            try
+            {
+                udpTransport.Send(
+                    MessageType.PlayerShotgunEvent,
+                    sequence,
+                    payload);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
         public int Tick()
         {
             ThrowIfDisposed();
@@ -813,6 +856,17 @@ namespace TopDownRoguelike.Networking.Client
                     transportEvent.Payload);
 
                 return;
+            }
+
+            if (transportEvent.TransportKind ==
+                NetworkTransportKind.Udp &&
+                transportEvent.PacketType ==
+                MessageType.PlayerShotgunEvent &&
+                State ==
+                NetworkClientState.InRoom)
+            {
+                HandlePlayerShotgunEvent(
+                    transportEvent);
             }
 
             if (transportEvent.TransportKind ==
@@ -1090,6 +1144,51 @@ namespace TopDownRoguelike.Networking.Client
                 PlayerShotEventReceived?.Invoke(
                     senderPlayerId,
                     shotEvent);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
+        private void HandlePlayerShotgunEvent(
+            NetworkTransportEvent transportEvent)
+        {
+            try
+            {
+                if (transportEvent == null ||
+                    transportEvent.Payload == null)
+                {
+                    throw new InvalidOperationException(
+                        "PlayerShotgunEvent transport data " +
+                        "cannot be null.");
+                }
+
+                PlayerShotgunEvent shotgunEvent =
+                    PlayerShotgunEventCodec.Decode(
+                        transportEvent.Payload);
+
+                uint senderPlayerId =
+                    transportEvent.PlayerId;
+
+                if (senderPlayerId == 0u)
+                {
+                    throw new InvalidOperationException(
+                        "PlayerShotgunEvent sender ID must " +
+                        "be non-zero.");
+                }
+
+                if (shotgunEvent.PlayerId == 0u)
+                {
+                    throw new InvalidOperationException(
+                        "PlayerShotgunEvent player ID must " +
+                        "be non-zero.");
+                }
+
+                PlayerShotgunEventReceived?.Invoke(
+                    senderPlayerId,
+                    shotgunEvent);
             }
             catch (Exception exception)
             {

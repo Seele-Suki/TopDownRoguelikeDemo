@@ -96,6 +96,9 @@ namespace TopDownRoguelike.Gameplay.Networking
             uint dashRequestSequence =
                 inputSource.DashRequestSequence;
 
+            uint shotgunRequestSequence =
+                inputSource.ShotgunRequestSequence;
+
             sendInput(
                 new PlayerInputPayload(
                     movement.x,
@@ -103,7 +106,8 @@ namespace TopDownRoguelike.Gameplay.Networking
                     aim.x,
                     aim.y,
                     fireHeld,
-                    dashRequestSequence));
+                    dashRequestSequence,
+                    shotgunRequestSequence));
         }
 
         private void OnDisable()

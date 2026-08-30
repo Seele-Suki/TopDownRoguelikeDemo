@@ -6,6 +6,7 @@ This document defines the Phase 5 UDP payload layout for:
 
 - `PlayerInput = 34`
 - `PlayerStateSnapshot = 35`
+- `PlayerShotgunEvent = 37`
 
 All offsets in the payload tables are relative to the first byte after
 the existing 32-byte UDP message header.
@@ -72,7 +73,7 @@ During Phase 5:
 The UDP header player ID identifies the player whose input is described.
 The payload does not repeat the player ID or sequence number.
 
-Fixed payload size: 24 bytes.
+Fixed payload size: 28 bytes.
 
 | Payload offset | Size | Type | Field |
 | ---: | ---: | --- | --- |
@@ -82,8 +83,9 @@ Fixed payload size: 24 bytes.
 | 12 | 4 | float32 | Aim Y |
 | 16 | 4 | uint32 | Input flags |
 | 20 | 4 | uint32 | Dash request sequence |
+| 24 | 4 | uint32 | Shotgun request sequence |
 
-Total datagram size: 56 bytes.
+Total datagram size: 60 bytes.
 
 Movement rules:
 
@@ -119,6 +121,17 @@ Dash request sequence rules:
   state from the same accepted gameplay input packet.
 - A request observed during cooldown is consumed and is not queued for later
   execution.
+- Sequence wrap from `0xFFFFFFFF` to `0` is accepted.
+
+Shotgun request sequence rules:
+
+- The sequence starts at zero before any shotgun request.
+- Each local shotgun press increments the sequence once.
+- The latest value persists across later input packets.
+- The server validates the UDP sender and forwards the value unchanged.
+- Gameplay acceptance and cooldown validation belong to the authoritative host.
+- Duplicate, older, and ambiguous half-range values must not replace the
+  authoritative host's current shotgun request sequence.
 - Sequence wrap from `0xFFFFFFFF` to `0` is accepted.
 
 ## PlayerStateSnapshot Payload
@@ -177,6 +190,40 @@ Snapshot validation rules:
 - Bit 1 of state flags is authoritative `IsDashing`.
 - Bits 2 through 31 are reserved and must be zero.
 
+## PlayerShotgunEvent Payload
+
+`PlayerShotgunEvent` describes one complete authoritative shotgun volley.
+It is produced by the authoritative host and forwarded to joining clients.
+
+Fixed payload size: 36 bytes.
+
+| Payload offset | Size | Type | Field |
+| ---: | ---: | --- | --- |
+| 0 | 4 | uint32 | Player ID |
+| 4 | 4 | uint32 | Volley sequence |
+| 8 | 4 | float32 | Origin X |
+| 12 | 4 | float32 | Origin Y |
+| 16 | 4 | float32 | Center direction X |
+| 20 | 4 | float32 | Center direction Y |
+| 24 | 4 | uint32 | Projectile count |
+| 28 | 4 | float32 | Spread angle |
+| 32 | 4 | float32 | Effective cooldown |
+
+Total datagram size: 68 bytes.
+
+Validation rules:
+
+- Player ID must be non-zero.
+- Origin and direction components must be finite.
+- Center direction must be non-zero.
+- Projectile count must be between 1 and 32.
+- Spread angle must be between 0 and 180 degrees.
+- Effective cooldown must be finite and non-negative.
+- Volley sequence is maintained independently for each player.
+- One payload represents one complete volley.
+- Damage and penetration are not included because they remain authoritative
+  host Gameplay state.
+
 ## Authority Rules
 
 - A joining client sends input, not position.
@@ -190,7 +237,6 @@ Snapshot validation rules:
 
 This layout does not yet assign bits for:
 
-- Shotgun
 - Damage
 - Health
 - Enemies

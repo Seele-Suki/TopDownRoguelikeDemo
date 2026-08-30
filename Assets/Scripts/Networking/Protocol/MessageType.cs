@@ -27,6 +27,7 @@ namespace TopDownRoguelike.Networking.Protocol
 
         PlayerInput = 34,
         PlayerStateSnapshot = 35,
-        PlayerShotEvent = 36
+        PlayerShotEvent = 36,
+        PlayerShotgunEvent = 37
     }
 }

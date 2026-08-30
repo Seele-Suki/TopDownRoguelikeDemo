@@ -28,7 +28,8 @@ namespace tdr::net
         udpPingHandler_(coordinator),
         playerInputForwarder_(coordinator),
         playerStateForwarder_(coordinator),
-        playerShotEventForwarder_(coordinator)
+        playerShotEventForwarder_(coordinator),
+        playerShotgunEventForwarder_(coordinator)
     {
         if (!listener_.IsListening())
         {
@@ -184,6 +185,27 @@ namespace tdr::net
                         break;
                     }
 
+                    case tdr::protocol::MessageType::
+                    PlayerShotgunEvent:
+                    {
+                        auto forwarded =
+                            playerShotgunEventForwarder_.Forward(
+                                receiveBuffer.data(),
+                                receivedByteCount,
+                                sourceAddress
+                            );
+
+                        response =
+                            std::move(
+                                forwarded.bytes
+                            );
+
+                        responseDestination =
+                            forwarded.destination;
+
+                        break;
+                    }
+
                     default:
                         throw std::invalid_argument(
                             "Unsupported UDP message type."
@@ -193,8 +215,7 @@ namespace tdr::net
                 catch (const std::exception& exception)
                 {
                     std::cerr
-                        << "[UDP] PlayerShotEvent or other UDP packet "
-                        << "was rejected: "
+                        << "[UDP] PlayerShotEvent, PlayerShotgunEvent, or other UDP packet was rejected: "
                         << exception.what()
                         << std::endl;
 

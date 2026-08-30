@@ -155,6 +155,11 @@ namespace tdr::protocol
             input.dashRequestSequence
         );
 
+        AppendNetwork32(
+            encoded,
+            input.shotgunRequestSequence
+        );
+
         return encoded;
     }
 
@@ -197,6 +202,9 @@ namespace tdr::protocol
             ReadNetwork32(data, offset);
 
         input.dashRequestSequence =
+            ReadNetwork32(data, offset);
+
+        input.shotgunRequestSequence =
             ReadNetwork32(data, offset);
 
         if ((input.flags & ~kKnownFlags) != 0U)

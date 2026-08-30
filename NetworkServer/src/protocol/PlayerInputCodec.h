@@ -7,7 +7,7 @@
 namespace tdr::protocol
 {
     inline constexpr std::size_t
-        kPlayerInputPayloadSize = 24U;
+        kPlayerInputPayloadSize = 28U;
 
     struct PlayerInputPayload final
     {
@@ -17,6 +17,7 @@ namespace tdr::protocol
         float aimY = 0.0F;
         std::uint32_t flags = 0U;
         std::uint32_t dashRequestSequence = 0U;
+        std::uint32_t shotgunRequestSequence = 0U;
     };
 
     class PlayerInputCodec final

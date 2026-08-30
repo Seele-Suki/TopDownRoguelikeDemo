@@ -9,6 +9,8 @@ namespace TopDownRoguelike.Gameplay.Networking
     {
         private bool hasDashRequestSequence;
 
+        private bool hasShotgunRequestSequence;
+
         public Vector2 MoveDirection
         {
             get;
@@ -33,6 +35,12 @@ namespace TopDownRoguelike.Gameplay.Networking
             private set;
         }
 
+        public uint ShotgunRequestSequence
+        {
+            get;
+            private set;
+        }
+
         public void ApplyInput(
             Vector2 moveDirection,
             Vector2 aimDirection)
@@ -41,7 +49,8 @@ namespace TopDownRoguelike.Gameplay.Networking
                 moveDirection,
                 aimDirection,
                 false,
-                DashRequestSequence);
+                DashRequestSequence,
+                ShotgunRequestSequence);
         }
 
         public void ApplyInputWithFireState(
@@ -53,7 +62,51 @@ namespace TopDownRoguelike.Gameplay.Networking
                 moveDirection,
                 aimDirection,
                 fireHeld,
-                DashRequestSequence);
+                DashRequestSequence,
+                ShotgunRequestSequence);
+        }
+
+        public void ApplyInputState(
+            Vector2 moveDirection,
+            Vector2 aimDirection,
+            bool fireHeld,
+            uint dashRequestSequence,
+            uint shotgunRequestSequence)
+        {
+            MoveDirection =
+                NormalizeIfNeeded(
+                    moveDirection);
+
+            AimDirection =
+                NormalizeIfNeeded(
+                    aimDirection);
+
+            IsFireHeld =
+                fireHeld;
+
+            if (!hasDashRequestSequence ||
+                IsNewerSequence(
+                    dashRequestSequence,
+                    DashRequestSequence))
+            {
+                DashRequestSequence =
+                    dashRequestSequence;
+
+                hasDashRequestSequence =
+                    true;
+            }
+
+            if (!hasShotgunRequestSequence ||
+                IsNewerSequence(
+                    shotgunRequestSequence,
+                    ShotgunRequestSequence))
+            {
+                ShotgunRequestSequence =
+                    shotgunRequestSequence;
+
+                hasShotgunRequestSequence =
+                    true;
+            }
         }
 
         public void ApplyInputState(
@@ -101,6 +154,12 @@ namespace TopDownRoguelike.Gameplay.Networking
                 0u;
 
             hasDashRequestSequence =
+                false;
+
+            ShotgunRequestSequence =
+                0u;
+
+            hasShotgunRequestSequence =
                 false;
         }
 

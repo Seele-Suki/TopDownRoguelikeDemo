@@ -940,6 +940,42 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void SendPlayerShotgunEvent_WhenNotInRoom_RejectsSend()
+        {
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                var shotgunEvent =
+                    new PlayerShotgunEvent(
+                        7u,
+                        1u,
+                        0.0f,
+                        0.0f,
+                        1.0f,
+                        0.0f,
+                        5u,
+                        40.0f,
+                        0.75f);
+
+                InvalidOperationException exception =
+                    Assert.Throws<InvalidOperationException>(
+                        () =>
+                            client.SendPlayerShotgunEvent(
+                                shotgunEvent));
+
+                Assert.That(
+                    exception.Message,
+                    Does.Contain("in a room"));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
         public void ForwardedPlayerInput_RaisesRemoteInputEvent()
         {
             var client =
@@ -1017,6 +1053,32 @@ namespace TopDownRoguelike.Tests.EditMode
             {
                 client.Dispose();
             }
+        }
+
+        [Test]
+        public void NetworkClient_ExposesPlayerShotgunEventReceived()
+        {
+            Type clientType =
+                typeof(NetworkClient);
+
+            EventInfo eventInfo =
+                clientType.GetEvent(
+                    "PlayerShotgunEventReceived",
+                    BindingFlags.Instance |
+                    BindingFlags.Public);
+
+            Assert.That(
+                eventInfo,
+                Is.Not.Null,
+                "NetworkClient must expose " +
+                "PlayerShotgunEventReceived.");
+
+            Assert.That(
+                eventInfo.EventHandlerType,
+                Is.EqualTo(
+                    typeof(Action<
+                        uint,
+                        PlayerShotgunEvent>)));
         }
 
         [Test]

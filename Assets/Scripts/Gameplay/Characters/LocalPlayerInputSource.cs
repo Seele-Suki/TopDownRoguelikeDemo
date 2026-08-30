@@ -73,11 +73,22 @@ namespace TopDownRoguelike.Gameplay.Characters
             private set;
         }
 
+        public uint ShotgunRequestSequence
+        {
+            get;
+            private set;
+        }
+
         private void Update()
         {
             if (Input.GetKeyDown(dashKey))
             {
                 RegisterDashRequest();
+            }
+
+            if (Input.GetMouseButtonDown(1))
+            {
+                RegisterShotgunRequest();
             }
         }
 
@@ -86,6 +97,14 @@ namespace TopDownRoguelike.Gameplay.Characters
             unchecked
             {
                 DashRequestSequence++;
+            }
+        }
+
+        private void RegisterShotgunRequest()
+        {
+            unchecked
+            {
+                ShotgunRequestSequence++;
             }
         }
 

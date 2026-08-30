@@ -1,3 +1,5 @@
+using System;
+using TopDownRoguelike.Gameplay.Networking;
 using TopDownRoguelike.Gameplay.Skills;
 using TopDownRoguelike.Gameplay.Weapons;
 using UnityEngine;
@@ -19,63 +21,184 @@ namespace TopDownRoguelike.Gameplay.Characters
         [SerializeField] private float cooldown;
         [SerializeField] private float cooldownRemaining;
 
-        private Camera mainCamera;
         private PlayerHealth playerHealth;
-        public bool IsReady => cooldownRemaining <= 0f;
-        public float CooldownRemaining => cooldownRemaining;
+        private IPlayerInputSource inputSource;
+        private uint lastProcessedShotgunRequestSequence;
+        private PlayerShotgunEventSource shotgunEventSource;
+
+        public bool IsReady =>
+            cooldownRemaining <= 0f;
+
+        public float CooldownRemaining =>
+            cooldownRemaining;
+
         public float CooldownNormalized =>
             cooldown > 0f
-                ? Mathf.Clamp01(cooldownRemaining / cooldown)
+                ? Mathf.Clamp01(
+                    cooldownRemaining / cooldown)
                 : 0f;
 
         private void Awake()
         {
-            mainCamera = Camera.main;
-            playerHealth = GetComponent<PlayerHealth>();
+            playerHealth =
+                GetComponent<PlayerHealth>();
 
-            if (shotgunData == null ||
-                projectilePool == null ||
-                firePoint == null ||
-                mainCamera == null ||
-                playerHealth == null)
+            inputSource =
+                GetComponent<IPlayerInputSource>();
+
+            if (inputSource == null)
             {
                 Debug.LogError(
-                    "ShotgunSkill: Required references are missing.");
+                    "ShotgunSkill requires an " +
+                    "IPlayerInputSource component.",
+                    this);
 
                 enabled = false;
                 return;
             }
 
-            cooldown = Mathf.Max(0f, shotgunData.Cooldown);
-            cooldownRemaining = 0f;
-            projectileCount =
-                Mathf.Max(1, shotgunData.ProjectileCount);
+            lastProcessedShotgunRequestSequence =
+                inputSource.ShotgunRequestSequence;
 
-            spreadAngle = shotgunData.SpreadAngle;
-            projectileDamage = shotgunData.ProjectileDamage;
+            if (shotgunData == null ||
+                projectilePool == null ||
+                firePoint == null ||
+                playerHealth == null)
+            {
+                Debug.LogError(
+                    "ShotgunSkill: Required references " +
+                    "are missing.",
+                    this);
+
+                enabled = false;
+                return;
+            }
+
+            cooldown =
+                Mathf.Max(
+                    0f,
+                    shotgunData.Cooldown);
+
+            cooldownRemaining = 0f;
+
+            projectileCount =
+                Mathf.Max(
+                    1,
+                    shotgunData.ProjectileCount);
+
+            spreadAngle =
+                shotgunData.SpreadAngle;
+
+            projectileDamage =
+                shotgunData.ProjectileDamage;
 
             penetrationCount =
-                Mathf.Max(0, shotgunData.PenetrationCount);
+                Mathf.Max(
+                    0,
+                    shotgunData.PenetrationCount);
         }
 
         private void Update()
         {
-            if (Time.timeScale <= 0f || playerHealth.IsDead)
+            bool hasShotgunRequest =
+                TryConsumeShotgunRequest();
+
+            if (Time.timeScale <= 0f ||
+                (playerHealth != null &&
+                 playerHealth.IsDead))
             {
                 return;
             }
 
             if (cooldownRemaining > 0f)
             {
-                cooldownRemaining = Mathf.Max(
-                    0f,
-                    cooldownRemaining - Time.deltaTime);
+                cooldownRemaining =
+                    Mathf.Max(
+                        0f,
+                        cooldownRemaining -
+                        Time.deltaTime);
             }
 
-            if (Input.GetMouseButtonDown(1) && IsReady)
+            if (hasShotgunRequest && IsReady)
             {
                 FireShotgun();
             }
+        }
+
+        public void SetInputSource(
+            IPlayerInputSource newInputSource)
+        {
+            if (newInputSource == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(newInputSource));
+            }
+
+            inputSource =
+                newInputSource;
+
+            lastProcessedShotgunRequestSequence =
+                inputSource.ShotgunRequestSequence;
+
+            enabled = true;
+        }
+
+        public void SetShotgunEventSource(
+            PlayerShotgunEventSource newEventSource)
+        {
+            if (newEventSource == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(newEventSource));
+            }
+
+            shotgunEventSource =
+                newEventSource;
+        }
+
+        private bool TryConsumeShotgunRequest()
+        {
+            if (inputSource == null)
+            {
+                return false;
+            }
+
+            uint currentSequence =
+                inputSource.ShotgunRequestSequence;
+
+            uint difference =
+                unchecked(
+                    currentSequence -
+                    lastProcessedShotgunRequestSequence);
+
+            if (difference == 0u ||
+                difference >= 0x80000000u)
+            {
+                return false;
+            }
+
+            lastProcessedShotgunRequestSequence =
+                currentSequence;
+
+            return true;
+        }
+
+        private Vector2 GetShotgunDirection()
+        {
+            if (inputSource == null)
+            {
+                return Vector2.zero;
+            }
+
+            Vector2 aimDirection =
+                inputSource.AimDirection;
+
+            if (aimDirection.sqrMagnitude < 0.01f)
+            {
+                return Vector2.zero;
+            }
+
+            return aimDirection.normalized;
         }
 
         public void AddProjectileDamage(int amount)
@@ -85,11 +208,20 @@ namespace TopDownRoguelike.Gameplay.Characters
                 return;
             }
 
+            long upgradedProjectileDamage =
+                (long)projectileDamage +
+                amount;
+
             projectileDamage =
-                Mathf.Max(1, projectileDamage + amount);
+                (int)Math.Min(
+                    int.MaxValue,
+                    Math.Max(
+                        1L,
+                        upgradedProjectileDamage));
 
             Debug.Log(
-                $"Shotgun projectile damage: {projectileDamage}");
+                $"Shotgun projectile damage: " +
+                $"{projectileDamage}");
         }
 
         public void AddProjectileCount(int amount)
@@ -99,29 +231,42 @@ namespace TopDownRoguelike.Gameplay.Characters
                 return;
             }
 
-            projectileCount = Mathf.Min(
-                shotgunData.MaxProjectileCount,
-                projectileCount + amount);
+            long upgradedProjectileCount =
+                (long)projectileCount +
+                amount;
 
-            Debug.Log($"Shotgun projectile count: {projectileCount}");
+            projectileCount =
+                (int)Math.Min(
+                    shotgunData.MaxProjectileCount,
+                    upgradedProjectileCount);
+
+            Debug.Log(
+                $"Shotgun projectile count: " +
+                $"{projectileCount}");
         }
 
         public void ReduceCooldown(float amount)
         {
-            if (amount <= 0f)
+            if (amount <= 0f ||
+                float.IsNaN(amount) ||
+                float.IsInfinity(amount))
             {
                 return;
             }
 
-            cooldown = Mathf.Max(
-                shotgunData.MinCooldown,
-                cooldown - amount);
+            cooldown =
+                Mathf.Max(
+                    shotgunData.MinCooldown,
+                    cooldown - amount);
 
-            cooldownRemaining = Mathf.Min(
-                cooldownRemaining,
-                cooldown);
+            cooldownRemaining =
+                Mathf.Min(
+                    cooldownRemaining,
+                    cooldown);
 
-            Debug.Log($"Shotgun cooldown: {cooldown:F2}");
+            Debug.Log(
+                $"Shotgun cooldown: " +
+                $"{cooldown:F2}");
         }
 
         public void AddPenetration(int amount)
@@ -131,57 +276,78 @@ namespace TopDownRoguelike.Gameplay.Characters
                 return;
             }
 
-            penetrationCount = Mathf.Min(
-                shotgunData.MaxPenetrationCount,
-                penetrationCount + amount);
+            long upgradedPenetrationCount =
+                (long)penetrationCount +
+                amount;
 
-            Debug.Log($"Shotgun penetration: {penetrationCount}");
+            penetrationCount =
+                (int)Math.Min(
+                    shotgunData.MaxPenetrationCount,
+                    upgradedPenetrationCount);
+
+            Debug.Log(
+                $"Shotgun penetration: " +
+                $"{penetrationCount}");
         }
 
         private void FireShotgun()
         {
-            Vector3 mouseWorldPosition =
-                mainCamera.ScreenToWorldPoint(Input.mousePosition);
-
-            mouseWorldPosition.z = 0f;
-
             Vector2 centerDirection =
-                ((Vector2)mouseWorldPosition -
-                 (Vector2)firePoint.position).normalized;
+                GetShotgunDirection();
 
             if (centerDirection.sqrMagnitude < 0.01f)
             {
                 return;
             }
 
-            float angleStep = projectileCount > 1
-                ? spreadAngle / (projectileCount - 1)
-                : 0f;
+            float angleStep =
+                projectileCount > 1
+                    ? spreadAngle /
+                      (projectileCount - 1)
+                    : 0f;
 
-            float startAngle = projectileCount > 1
-                ? -spreadAngle * 0.5f
-                : 0f;
+            float startAngle =
+                projectileCount > 1
+                    ? -spreadAngle * 0.5f
+                    : 0f;
 
-            for (int i = 0; i < projectileCount; i++)
+            for (int i = 0;
+                 i < projectileCount;
+                 i++)
             {
-                float currentAngle = startAngle + angleStep * i;
+                float currentAngle =
+                    startAngle +
+                    angleStep * i;
 
                 Vector2 projectileDirection =
-                    (Vector2)(Quaternion.Euler(
-                        0f,
-                        0f,
-                        currentAngle) * centerDirection);
+                    (Vector2)(
+                        Quaternion.Euler(
+                            0f,
+                            0f,
+                            currentAngle) *
+                        centerDirection);
 
-                FireProjectile(projectileDirection);
+                FireProjectile(
+                    projectileDirection);
             }
-            cooldownRemaining = cooldown;
+
+            cooldownRemaining =
+                cooldown;
+
+            shotgunEventSource?.NotifyShotgun(
+                centerDirection,
+                (uint)projectileCount,
+                spreadAngle,
+                cooldown);
         }
 
-        private void FireProjectile(Vector2 direction)
+        private void FireProjectile(
+            Vector2 direction)
         {
-            Projectile projectile = projectilePool.GetProjectile(
-                firePoint.position,
-                Quaternion.identity);
+            Projectile projectile =
+                projectilePool.GetProjectile(
+                    firePoint.position,
+                    Quaternion.identity);
 
             projectile.Initialize(
                 direction,

@@ -1593,8 +1593,108 @@ namespace TopDownRoguelike.Tests.EditMode
             }
         }
 
+        [Test]
+        public void NetworkGameBootstrap_ExposesHostShotgunPublisherConfiguration()
+        {
+            Type bootstrapType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "NetworkGameBootstrap");
+
+            Assert.That(
+                bootstrapType,
+                Is.Not.Null,
+                "NetworkGameBootstrap must exist.");
+
+            MethodInfo method =
+                bootstrapType.GetMethod(
+                    "TryConfigureHostShotgunPublishers",
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic);
+
+            Assert.That(
+                method,
+                Is.Not.Null,
+                "NetworkGameBootstrap must configure " +
+                "shotgun publishers for both host players.");
+        }
+
+        [Test]
+        public void NetworkGameBootstrap_ExposesShotgunEventRouting()
+        {
+            Type bootstrapType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "NetworkGameBootstrap");
+
+            Assert.That(
+                bootstrapType,
+                Is.Not.Null);
+
+            EventInfo eventInfo =
+                bootstrapType.GetEvent(
+                    "PlayerShotgunEventReceived",
+                    BindingFlags.Instance |
+                    BindingFlags.Public);
+
+            Assert.That(
+                eventInfo,
+                Is.Not.Null,
+                "NetworkGameBootstrap must expose " +
+                "PlayerShotgunEventReceived.");
+
+            MethodInfo subscribeMethod =
+                bootstrapType.GetMethod(
+                    "SubscribeToRemoteShotgunEvents",
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic);
+
+            Assert.That(
+                subscribeMethod,
+                Is.Not.Null,
+                "NetworkGameBootstrap must subscribe to " +
+                "NetworkClient.PlayerShotgunEventReceived.");
+        }
+
+        [Test]
+        public void NetworkGameBootstrap_ExposesRemoteShotgunVisualConfiguration()
+        {
+            Type bootstrapType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "NetworkGameBootstrap");
+
+            Assert.That(
+                bootstrapType,
+                Is.Not.Null);
+
+            MethodInfo receiverMethod =
+                bootstrapType.GetMethod(
+                    "TryConfigureRemoteShotgunReceiver",
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic);
+
+            Assert.That(
+                receiverMethod,
+                Is.Not.Null,
+                "NetworkGameBootstrap must configure " +
+                "the remote shotgun receiver.");
+
+            MethodInfo spawnerMethod =
+                bootstrapType.GetMethod(
+                    "TryConfigureRemoteShotgunSpawner",
+                    BindingFlags.Static |
+                    BindingFlags.NonPublic);
+
+            Assert.That(
+                spawnerMethod,
+                Is.Not.Null,
+                "NetworkGameBootstrap must configure " +
+                "the remote shotgun visual spawner.");
+        }
+
         private static Component AddInitializedPlayerHealth(
-    GameObject playerObject)
+            GameObject playerObject)
         {
             Type playerHealthType =
                 FindType(

@@ -67,6 +67,9 @@ namespace
             0x00U, 0x00U, 0x00U, 0x00U,
 
             // DashRequestSequence: no request yet
+            0x00U, 0x00U, 0x00U, 0x00U,
+
+            // ShotgunRequestSequence: no request yet
             0x00U, 0x00U, 0x00U, 0x00U
         };
 
@@ -113,7 +116,7 @@ namespace
         );
     }
 
-    void PlayerInputCarriesDashRequestSequence()
+    void PlayerInputCarriesDashAndShotgunRequestSequences()
     {
         using namespace tdr::protocol;
 
@@ -133,8 +136,11 @@ namespace
             // Flags: bit 0 = FireHeld
             0x00U, 0x00U, 0x00U, 0x01U,
 
-            // DashRequestSequence: 0x01020304
-            0x01U, 0x02U, 0x03U, 0x04U
+            // DashRequestSequence
+            0x01U, 0x02U, 0x03U, 0x04U,
+
+            // ShotgunRequestSequence
+            0x05U, 0x06U, 0x07U, 0x08U
         };
 
         const PlayerInputPayload decoded =
@@ -148,8 +154,8 @@ namespace
 
         Require(
             reencoded == expected,
-            "Player input did not preserve the "
-            "dash request sequence."
+            "Player input did not preserve the dash "
+            "and shotgun request sequences."
         );
     }
 
@@ -681,7 +687,7 @@ int main()
     {
         PlayerInputUsesStableWireLayout();
 
-        PlayerInputCarriesDashRequestSequence();
+        PlayerInputCarriesDashAndShotgunRequestSequences();
 
         PlayerInputRejectsInvalidValues();
         PlayerInputRejectsMalformedPayloads();

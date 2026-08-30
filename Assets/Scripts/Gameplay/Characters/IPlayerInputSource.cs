@@ -11,5 +11,7 @@ namespace TopDownRoguelike.Gameplay.Characters
         bool IsFireHeld { get; }
 
         uint DashRequestSequence { get; }
+
+        uint ShotgunRequestSequence { get; }
     }
 }

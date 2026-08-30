@@ -40,6 +40,8 @@ add_executable(NetworkServer
     src/net/PlayerStateForwarder.cpp
     src/net/PlayerShotEventForwarder.h
     src/net/PlayerShotEventForwarder.cpp
+    src/net/PlayerShotgunEventForwarder.h
+    src/net/PlayerShotgunEventForwarder.cpp
 
     src/protocol/MessageType.h
     src/protocol/MessageHeader.h
@@ -62,6 +64,8 @@ add_executable(NetworkServer
     src/protocol/PlayerStateSnapshotCodec.cpp
     src/protocol/PlayerShotEventCodec.h
     src/protocol/PlayerShotEventCodec.cpp
+    src/protocol/PlayerShotgunEventCodec.h
+    src/protocol/PlayerShotgunEventCodec.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -509,6 +513,8 @@ add_executable(ServerLoopTests
     src/net/PlayerStateForwarder.cpp
     src/net/PlayerShotEventForwarder.h
     src/net/PlayerShotEventForwarder.cpp
+    src/net/PlayerShotgunEventForwarder.h
+    src/net/PlayerShotgunEventForwarder.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -541,6 +547,8 @@ add_executable(ServerLoopTests
     src/protocol/PlayerStateSnapshotCodec.cpp
     src/protocol/PlayerShotEventCodec.h
     src/protocol/PlayerShotEventCodec.cpp
+    src/protocol/PlayerShotgunEventCodec.h
+    src/protocol/PlayerShotgunEventCodec.cpp
 )
 
 target_include_directories(ServerLoopTests
@@ -816,6 +824,8 @@ add_executable(PlayerShotEventForwarderTests
     src/net/TcpClientSession.cpp
     src/net/TcpConnection.h
     src/net/TcpConnection.cpp
+    src/net/PlayerShotgunEventForwarder.h
+    src/net/PlayerShotgunEventForwarder.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -842,6 +852,8 @@ add_executable(PlayerShotEventForwarderTests
     src/protocol/PlayerShotEventCodec.cpp
     src/protocol/RoomStateSnapshotCodec.h
     src/protocol/RoomStateSnapshotCodec.cpp
+    src/protocol/PlayerShotgunEventCodec.h
+    src/protocol/PlayerShotgunEventCodec.cpp
 )
 
 target_include_directories(PlayerShotEventForwarderTests
@@ -897,6 +909,37 @@ endif()
 add_test(
     NAME PlayerShotEventCodecTests
     COMMAND PlayerShotEventCodecTests
+)
+
+add_executable(PlayerShotgunEventCodecTests
+    tests/PlayerShotgunEventCodecTests.cpp
+
+    src/protocol/PlayerShotgunEventCodec.h
+    src/protocol/PlayerShotgunEventCodec.cpp
+    src/protocol/NetworkByteOrder.h
+)
+
+target_include_directories(PlayerShotgunEventCodecTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(PlayerShotgunEventCodecTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(PlayerShotgunEventCodecTests
+        PRIVATE
+            ws2_32
+    )
+endif()
+
+add_test(
+    NAME PlayerShotgunEventCodecTests
+    COMMAND PlayerShotgunEventCodecTests
 )
 
 add_executable(PlayerInputForwarderTests
@@ -967,5 +1010,74 @@ endif()
 add_test(
     NAME PlayerInputForwarderTests
     COMMAND PlayerInputForwarderTests
+)
+
+add_executable(PlayerShotgunEventForwarderTests
+    tests/PlayerShotgunEventForwarderTests.cpp
+
+    src/net/PlayerShotgunEventForwarder.h
+    src/net/PlayerShotgunEventForwarder.cpp
+    src/net/ServerCoordinator.h
+    src/net/ServerCoordinator.cpp
+    src/net/TcpClientSession.h
+    src/net/TcpClientSession.cpp
+    src/net/TcpConnection.h
+    src/net/TcpConnection.cpp
+    src/net/PlayerShotgunEventForwarder.h
+    src/net/PlayerShotgunEventForwarder.cpp
+
+    src/room/ClientState.h
+    src/room/ClientState.cpp
+    src/room/Room.h
+    src/room/Room.cpp
+    src/room/RoomManager.h
+    src/room/RoomManager.cpp
+    src/room/PlayerIdAllocator.h
+    src/room/PlayerIdAllocator.cpp
+    src/room/SessionTokenGenerator.h
+    src/room/SessionTokenGenerator.cpp
+
+    src/protocol/PacketCodec.h
+    src/protocol/PacketCodec.cpp
+    src/protocol/MessageType.h
+    src/protocol/MessageHeader.h
+    src/protocol/NetworkByteOrder.h
+    src/protocol/UdpMessageHeader.h
+    src/protocol/UdpPacketCodec.h
+    src/protocol/UdpPacketCodec.cpp
+    src/protocol/SessionTokenCodec.h
+    src/protocol/SessionTokenCodec.cpp
+    src/protocol/PlayerShotgunEventCodec.h
+    src/protocol/PlayerShotgunEventCodec.cpp
+    src/protocol/RoomStateSnapshotCodec.h
+    src/protocol/RoomStateSnapshotCodec.cpp
+    src/protocol/PlayerShotgunEventCodec.h
+    src/protocol/PlayerShotgunEventCodec.cpp
+)
+
+target_include_directories(PlayerShotgunEventForwarderTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(
+        PlayerShotgunEventForwarderTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(
+        PlayerShotgunEventForwarderTests
+        PRIVATE
+            ws2_32
+            bcrypt
+    )
+endif()
+
+add_test(
+    NAME PlayerShotgunEventForwarderTests
+    COMMAND PlayerShotgunEventForwarderTests
 )
 endif()

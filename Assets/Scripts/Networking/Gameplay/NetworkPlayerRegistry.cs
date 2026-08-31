@@ -39,6 +39,19 @@ namespace TopDownRoguelike.Networking.Gameplay
                 out player);
         }
 
+        public IEnumerable<KeyValuePair<uint, GameObject>>
+            EnumeratePlayers()
+        {
+            foreach (KeyValuePair<uint, GameObject> entry
+                in players)
+            {
+                if (entry.Value != null)
+                {
+                    yield return entry;
+                }
+            }
+        }
+
         public bool Remove(
             uint playerId)
         {

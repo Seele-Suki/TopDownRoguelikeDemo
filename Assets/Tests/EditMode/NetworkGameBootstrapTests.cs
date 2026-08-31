@@ -294,6 +294,162 @@ namespace TopDownRoguelike.Tests.EditMode
             }
         }
 
+        [TestCase(GameMode.SinglePlayer)]
+        [TestCase(GameMode.MultiplayerClient)]
+        public void TryConfigureHostWorldSnapshotPublisher_NonHostModeDoesNotCreatePublisher(
+            GameMode mode)
+        {
+            Type bootstrapType =
+                FindType(BootstrapTypeName);
+
+            Type worldPublisherType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "HostWorldSnapshotPublisher");
+
+            Assert.That(bootstrapType, Is.Not.Null);
+            Assert.That(worldPublisherType, Is.Not.Null);
+
+            var bootstrapObject =
+                new GameObject(
+                    "Non-Host World Snapshot Publisher Test");
+
+            bootstrapObject.SetActive(false);
+
+            try
+            {
+                if (mode == GameMode.SinglePlayer)
+                {
+                    GameSession.ConfigureSinglePlayer();
+                }
+                else
+                {
+                    GameSession.ConfigureMultiplayerClient();
+                }
+
+                Component bootstrap =
+                    bootstrapObject.AddComponent(
+                        bootstrapType);
+
+                InvokePrivate(
+                    bootstrap,
+                    "Awake");
+
+                Action<WorldStateSnapshotPayload> sender =
+                    _ => { };
+
+                InvokePrivate(
+                    bootstrap,
+                    "TryConfigureHostWorldSnapshotPublisher",
+                    sender);
+
+                Component publisher =
+                    bootstrapObject.GetComponent(
+                        worldPublisherType);
+
+                Assert.That(
+                    publisher,
+                    Is.Null,
+                    "Non-host modes must not create a " +
+                    "HostWorldSnapshotPublisher.");
+            }
+            finally
+            {
+                GameSession.Reset();
+
+                UnityEngine.Object.DestroyImmediate(
+                    bootstrapObject);
+            }
+        }
+
+        [Test]
+        public void TryConfigureHostEnemySpawnPublisher_HostCreatesPublisher()
+        {
+            Type bootstrapType =
+                FindType(BootstrapTypeName);
+
+            Type spawnerType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Enemies." +
+                    "EnemySpawner");
+
+            Type publisherType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "HostEnemySpawnPublisher");
+
+            Assert.That(bootstrapType, Is.Not.Null);
+            Assert.That(spawnerType, Is.Not.Null);
+            Assert.That(publisherType, Is.Not.Null);
+
+            var bootstrapObject =
+                new GameObject(
+                    "Host Enemy Spawn Bootstrap Test");
+
+            var spawnerObject =
+                new GameObject(
+                    "Host Enemy Spawn Spawner Test");
+
+            bootstrapObject.SetActive(false);
+
+            try
+            {
+                GameSession.ConfigureMultiplayerHost();
+
+                Component bootstrap =
+                    bootstrapObject.AddComponent(
+                        bootstrapType);
+
+                spawnerObject.AddComponent(
+                    spawnerType);
+
+                InvokePrivate(
+                    bootstrap,
+                    "Awake");
+
+                Action<WorldEntityRecord> sender =
+                    _ => { };
+
+                MethodInfo configureMethod =
+                    bootstrapType.GetMethod(
+                        "TryConfigureHostEnemySpawnPublisher",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(
+                    configureMethod,
+                    Is.Not.Null,
+                    "Host bootstrap must configure the " +
+                    "reliable enemy spawn publisher.");
+
+                bool wasConfigured =
+                    (bool)configureMethod.Invoke(
+                        bootstrap,
+                        new object[]
+                        {
+                            sender
+                        });
+
+                Assert.That(wasConfigured, Is.True);
+
+                Component publisher =
+                    bootstrapObject.GetComponent(
+                        publisherType);
+
+                Assert.That(publisher, Is.Not.Null);
+            }
+            finally
+            {
+                GameSession.Reset();
+
+                UnityEngine.Object.DestroyImmediate(
+                    spawnerObject);
+
+                UnityEngine.Object.DestroyImmediate(
+                    bootstrapObject);
+            }
+        }
+
         [Test]
         public void ConfigureHostPlayers_CreatesTwoRegisteredPlayers()
         {

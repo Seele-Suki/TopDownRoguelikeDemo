@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TopDownRoguelike.Networking.Protocol;
 using UnityEngine;
 
 namespace TopDownRoguelike.Gameplay.Enemies
@@ -7,6 +8,11 @@ namespace TopDownRoguelike.Gameplay.Enemies
     [CreateAssetMenu(fileName = "EnemyData", menuName = "TopDown Roguelike/Enemy Data")]
     public class EnemyData : ScriptableObject
     {
+        [Header("Networking")]
+        [SerializeField]
+        private NetworkEnemyArchetype networkArchetype =
+            NetworkEnemyArchetype.Invalid;
+
         [Header("Health")]
         [SerializeField] private int maxHealth = 3;
 
@@ -21,6 +27,9 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
         [Header("Reward")]
         [SerializeField] private int experienceReward = 1;
+
+        public NetworkEnemyArchetype NetworkArchetype =>
+            networkArchetype;
 
         public int MaxHealth => maxHealth;
         public float MoveSpeed => moveSpeed;

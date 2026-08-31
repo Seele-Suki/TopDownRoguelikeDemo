@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 using TopDownRoguelike.Networking.Gameplay;
 using UnityEngine;
@@ -49,6 +50,62 @@ namespace TopDownRoguelike.Tests.EditMode
             Assert.That(found, Is.True);
             Assert.That(registeredPlayer, Is.SameAs(player));
             Assert.That(registry.Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void EnumeratePlayers_ReturnsAllRegisteredPlayers()
+        {
+            GameObject host =
+                CreatePlayer("HostPlayer");
+
+            GameObject client =
+                CreatePlayer("ClientPlayer");
+
+            registry.TryRegister(
+                1u,
+                host);
+
+            registry.TryRegister(
+                2u,
+                client);
+
+            MethodInfo enumerateMethod =
+                typeof(NetworkPlayerRegistry).GetMethod(
+                    "EnumeratePlayers",
+                    BindingFlags.Instance |
+                    BindingFlags.Public);
+
+            Assert.That(
+                enumerateMethod,
+                Is.Not.Null,
+                "NetworkPlayerRegistry.EnumeratePlayers must exist.");
+
+            object result =
+                enumerateMethod.Invoke(
+                    registry,
+                    null);
+
+            var entries =
+                new List<KeyValuePair<uint, GameObject>>(
+                    (IEnumerable<KeyValuePair<uint, GameObject>>)result);
+
+            Assert.That(
+                entries,
+                Has.Count.EqualTo(2));
+
+            Assert.That(
+                entries.Exists(
+                    entry =>
+                        entry.Key == 1u &&
+                        entry.Value == host),
+                Is.True);
+
+            Assert.That(
+                entries.Exists(
+                    entry =>
+                        entry.Key == 2u &&
+                        entry.Value == client),
+                Is.True);
         }
 
         [Test]

@@ -1,5 +1,7 @@
 using System;
+using TopDownRoguelike.Gameplay.Bosses;
 using TopDownRoguelike.Gameplay.Characters;
+using TopDownRoguelike.Gameplay.Enemies;
 using TopDownRoguelike.Gameplay.Weapons;
 using TopDownRoguelike.Gameplay.UI;
 using TopDownRoguelike.Infrastructure;
@@ -120,6 +122,15 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             scenePlayer.SetActive(true);
 
+            if (!EnsurePlayerNetworkEntityId(
+                    scenePlayer,
+                    SinglePlayerId))
+            {
+                FailConfiguration(
+                    "Failed to assign the single-player entity ID.");
+                return;
+            }
+
             if (!registry.TryRegister(
                     SinglePlayerId,
                     scenePlayer))
@@ -180,8 +191,38 @@ namespace TopDownRoguelike.Gameplay.Networking
                         networkBehaviour.Client
                             .SendPlayerStateSnapshot))
                 {
+                        FailConfiguration(
+                            "The host state publisher " +
+                            "could not be configured.");
+                }
+
+                if (enabled &&
+                    !TryConfigureHostWorldSnapshotPublisher(
+                        networkBehaviour.Client
+                            .SendWorldStateSnapshot))
+                {
                     FailConfiguration(
-                        "The host state publisher " +
+                        "The host world snapshot publisher " +
+                        "could not be configured.");
+                }
+
+                if (enabled &&
+                    !TryConfigureHostEnemySpawnPublisher(
+                        networkBehaviour.Client
+                            .SendWorldEntitySpawned))
+                {
+                    FailConfiguration(
+                        "The host enemy spawn publisher " +
+                        "could not be configured.");
+                }
+
+                if (enabled &&
+                    !TryConfigureHostEnemyDeathPublisher(
+                        networkBehaviour.Client
+                            .SendWorldEntityRemoved))
+                {
+                    FailConfiguration(
+                        "The host enemy death publisher " +
                         "could not be configured.");
                 }
 
@@ -338,6 +379,20 @@ namespace TopDownRoguelike.Gameplay.Networking
                 return;
             }
 
+            if (!EnsurePlayerNetworkEntityId(
+                    scenePlayer,
+                    localPlayerId) ||
+                !EnsurePlayerNetworkEntityId(
+                    createdRemotePlayer,
+                    remotePlayerId))
+            {
+                DestroyPlayer(createdRemotePlayer);
+
+                FailConfiguration(
+                    "Failed to assign host player entity IDs.");
+                return;
+            }
+
             if (!registry.TryRegister(
                     localPlayerId,
                     scenePlayer) ||
@@ -408,6 +463,20 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             DisableLocalControl(
                 createdRemotePlayer);
+
+            if (!EnsurePlayerNetworkEntityId(
+                    scenePlayer,
+                    localPlayerId) ||
+                !EnsurePlayerNetworkEntityId(
+                    createdRemotePlayer,
+                    hostPlayerId))
+            {
+                DestroyPlayer(createdRemotePlayer);
+
+                FailConfiguration(
+                    "Failed to assign client player entity IDs.");
+                return;
+            }
 
             if (!TryConfigureLocalDashReconciler(
                     scenePlayer,
@@ -1192,6 +1261,144 @@ namespace TopDownRoguelike.Gameplay.Networking
                 },
                 sendSnapshot);
 
+            return true;
+        }
+
+        private static bool EnsurePlayerNetworkEntityId(
+            GameObject player,
+            uint playerId)
+        {
+            if (player == null ||
+                playerId == 0u)
+            {
+                return false;
+            }
+
+            NetworkEntityId identifier =
+                player.GetComponent<NetworkEntityId>();
+
+            if (identifier == null)
+            {
+                identifier =
+                    player.AddComponent<NetworkEntityId>();
+            }
+
+            if (identifier.IsAssigned)
+            {
+                return identifier.EntityId == playerId &&
+                    identifier.EntityType ==
+                        NetworkEntityType.Player;
+            }
+
+            return identifier.TryAssign(
+                playerId,
+                NetworkEntityType.Player);
+        }
+
+        private bool TryConfigureHostWorldSnapshotPublisher(
+            Action<WorldStateSnapshotPayload>
+                sendSnapshot)
+        {
+            if (!GameSession.IsHost ||
+                registry == null ||
+                sendSnapshot == null)
+            {
+                return false;
+            }
+
+            EnemySpawner enemySpawner =
+                FindObjectOfType<EnemySpawner>();
+
+            BossEncounterController bossEncounterController =
+                FindObjectOfType<BossEncounterController>();
+
+            if (enemySpawner == null ||
+                bossEncounterController == null)
+            {
+                return false;
+            }
+
+            HostWorldSnapshotPublisher publisher =
+                GetComponent<HostWorldSnapshotPublisher>();
+
+            if (publisher == null)
+            {
+                publisher =
+                    gameObject.AddComponent<
+                        HostWorldSnapshotPublisher>();
+            }
+
+            publisher.ConfigureWorldSources(
+                registry,
+                enemySpawner,
+                bossEncounterController);
+
+            publisher.ConfigureSnapshotSender(
+                sendSnapshot);
+
+            return true;
+        }
+
+        private bool TryConfigureHostEnemySpawnPublisher(
+            Action<WorldEntityRecord> sendSpawn)
+        {
+            if (!GameSession.IsHost ||
+                sendSpawn == null)
+            {
+                return false;
+            }
+
+            EnemySpawner enemySpawner =
+                FindObjectOfType<EnemySpawner>();
+
+            if (enemySpawner == null)
+            {
+                return false;
+            }
+
+            HostEnemySpawnPublisher publisher =
+                GetComponent<HostEnemySpawnPublisher>();
+
+            if (publisher == null)
+            {
+                publisher =
+                    gameObject.AddComponent<
+                        HostEnemySpawnPublisher>();
+            }
+
+            publisher.Configure(
+                enemySpawner,
+                sendSpawn);
+
+            return true;
+        }
+
+        private bool TryConfigureHostEnemyDeathPublisher(
+            Action<WorldEntityRemovedPayload> sendRemoval)
+        {
+            if (!GameSession.IsHost || sendRemoval == null)
+            {
+                return false;
+            }
+
+            EnemySpawner enemySpawner =
+                FindObjectOfType<EnemySpawner>();
+
+            if (enemySpawner == null)
+            {
+                return false;
+            }
+
+            HostEnemyDeathPublisher publisher =
+                GetComponent<HostEnemyDeathPublisher>();
+
+            if (publisher == null)
+            {
+                publisher = gameObject.AddComponent<
+                    HostEnemyDeathPublisher>();
+            }
+
+            publisher.Configure(enemySpawner, sendRemoval);
             return true;
         }
 

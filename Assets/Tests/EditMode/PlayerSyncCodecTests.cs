@@ -268,8 +268,13 @@ namespace TopDownRoguelike.Tests.EditMode
                 0x00, 0x00, 0x00, 0x00,
                 // Aim Y: 1
                 0x3F, 0x80, 0x00, 0x00,
-                // Reserved
+                // State flags: none
                 0x00, 0x00, 0x00, 0x00,
+                // Current health: 1
+                0x00, 0x01,
+
+                // Max health: 1
+                0x00, 0x01,
 
                 // Player ID: 0x01020304
                 0x01, 0x02, 0x03, 0x04,
@@ -281,8 +286,13 @@ namespace TopDownRoguelike.Tests.EditMode
                 0xBF, 0x80, 0x00, 0x00,
                 // Aim Y: 0
                 0x00, 0x00, 0x00, 0x00,
-                // Reserved
-                0x00, 0x00, 0x00, 0x00
+                // State flags: none
+                0x00, 0x00, 0x00, 0x00,
+                // Current health: 1
+                0x00, 0x01,
+
+                // Max health: 1
+                0x00, 0x01,
             };
 
             byte[] encoded =
@@ -330,6 +340,106 @@ namespace TopDownRoguelike.Tests.EditMode
             Assert.That(
                 decoded.Players[1].PositionY,
                 Is.EqualTo(4.25f));
+        }
+
+        [Test]
+        public void PlayerStateRecordExposesHealthFields()
+        {
+            Type recordType =
+                typeof(PlayerStateRecord);
+
+            PropertyInfo currentHealthProperty =
+                recordType.GetProperty("CurrentHealth");
+
+            PropertyInfo maxHealthProperty =
+                recordType.GetProperty("MaxHealth");
+
+            Assert.That(
+                currentHealthProperty,
+                Is.Not.Null,
+                "PlayerStateRecord must expose CurrentHealth.");
+
+            Assert.That(
+                maxHealthProperty,
+                Is.Not.Null,
+                "PlayerStateRecord must expose MaxHealth.");
+
+            Assert.That(
+                currentHealthProperty.PropertyType,
+                Is.EqualTo(typeof(ushort)));
+
+            Assert.That(
+                maxHealthProperty.PropertyType,
+                Is.EqualTo(typeof(ushort)));
+
+            ConstructorInfo constructor =
+                recordType.GetConstructor(
+                    new[]
+                    {
+                typeof(uint),
+                typeof(float),
+                typeof(float),
+                typeof(float),
+                typeof(float),
+                typeof(bool),
+                typeof(bool),
+                typeof(ushort),
+                typeof(ushort)
+                    });
+
+            Assert.That(
+                constructor,
+                Is.Not.Null,
+                "PlayerStateRecord must accept health fields.");
+        }
+
+        [Test]
+        public void PlayerStateSnapshotRecordSize_IncludesHealthFields()
+        {
+            Assert.That(
+                PlayerStateSnapshotCodec.RecordSize,
+                Is.EqualTo(28));
+        }
+
+        [Test]
+        public void PlayerStateHealthFields_UseNetworkByteOrder()
+        {
+            var snapshot =
+                new PlayerStateSnapshotPayload(
+                    new[]
+                    {
+                new PlayerStateRecord(
+                    1u,
+                    0.0f,
+                    0.0f,
+                    1.0f,
+                    0.0f,
+                    true,
+                    false,
+                    0x1234,
+                    0x5678)
+                    });
+
+            byte[] encoded =
+                PlayerStateSnapshotCodec.Encode(snapshot);
+
+            Assert.That(encoded.Length, Is.EqualTo(32));
+
+            Assert.That(encoded[28], Is.EqualTo(0x12));
+            Assert.That(encoded[29], Is.EqualTo(0x34));
+            Assert.That(encoded[30], Is.EqualTo(0x56));
+            Assert.That(encoded[31], Is.EqualTo(0x78));
+
+            PlayerStateSnapshotPayload decoded =
+                PlayerStateSnapshotCodec.Decode(encoded);
+
+            Assert.That(
+                decoded.Players[0].CurrentHealth,
+                Is.EqualTo((ushort)0x1234));
+
+            Assert.That(
+                decoded.Players[0].MaxHealth,
+                Is.EqualTo((ushort)0x5678));
         }
 
         [Test]
@@ -381,7 +491,7 @@ namespace TopDownRoguelike.Tests.EditMode
         [Test]
         public void PlayerStateDecodeUnknownFlags_RejectsPayload()
         {
-            var payload = new byte[28];
+            var payload = new byte[32];
 
             // Count = 1
             payload[3] = 1;
@@ -549,10 +659,10 @@ namespace TopDownRoguelike.Tests.EditMode
             var duplicateId =
                 (byte[])encoded.Clone();
 
-            duplicateId[28] = 0x00;
-            duplicateId[29] = 0x00;
-            duplicateId[30] = 0x00;
-            duplicateId[31] = 0x01;
+            duplicateId[32] = 0x00;
+            duplicateId[33] = 0x00;
+            duplicateId[34] = 0x00;
+            duplicateId[35] = 0x01;
 
             Assert.Throws<ArgumentException>(
                 () =>
@@ -562,8 +672,15 @@ namespace TopDownRoguelike.Tests.EditMode
             var descendingIds =
                 (byte[])encoded.Clone();
 
+            descendingIds[4] = 0x00;
+            descendingIds[5] = 0x00;
+            descendingIds[6] = 0x00;
             descendingIds[7] = 0x02;
-            descendingIds[31] = 0x01;
+
+            descendingIds[32] = 0x00;
+            descendingIds[33] = 0x00;
+            descendingIds[34] = 0x00;
+            descendingIds[35] = 0x01;
 
             Assert.Throws<ArgumentException>(
                 () =>
@@ -597,6 +714,131 @@ namespace TopDownRoguelike.Tests.EditMode
                 () =>
                     PlayerStateSnapshotCodec.Decode(
                         nanAim));
+        }
+
+        [Test]
+        public void PlayerStateEncodeInvalidHealth_RejectsSnapshot()
+        {
+            var currentHealthAboveMax =
+                new PlayerStateSnapshotPayload(
+                    new[]
+                    {
+                new PlayerStateRecord(
+                    1u,
+                    0.0f,
+                    0.0f,
+                    1.0f,
+                    0.0f,
+                    false,
+                    false,
+                    101,
+                    100)
+                    });
+
+            var zeroMaxHealth =
+                new PlayerStateSnapshotPayload(
+                    new[]
+                    {
+                new PlayerStateRecord(
+                    1u,
+                    0.0f,
+                    0.0f,
+                    1.0f,
+                    0.0f,
+                    false,
+                    false,
+                    0,
+                    0)
+                    });
+
+            Assert.Throws<ArgumentException>(
+                () =>
+                    PlayerStateSnapshotCodec.Encode(
+                        currentHealthAboveMax));
+
+            Assert.Throws<ArgumentException>(
+                () =>
+                    PlayerStateSnapshotCodec.Encode(
+                        zeroMaxHealth));
+        }
+
+        [Test]
+        public void PlayerStateDecodeInvalidHealth_RejectsPayload()
+        {
+            var valid =
+                new PlayerStateSnapshotPayload(
+                    new[]
+                    {
+                new PlayerStateRecord(
+                    1u,
+                    0.0f,
+                    0.0f,
+                    1.0f,
+                    0.0f,
+                    false,
+                    false,
+                    100,
+                    100)
+                    });
+
+            byte[] currentHealthAboveMax =
+                PlayerStateSnapshotCodec.Encode(valid);
+
+            currentHealthAboveMax[28] = 0x00;
+            currentHealthAboveMax[29] = 0x65;
+
+            currentHealthAboveMax[30] = 0x00;
+            currentHealthAboveMax[31] = 0x64;
+
+            byte[] zeroMaxHealth =
+                PlayerStateSnapshotCodec.Encode(valid);
+
+            zeroMaxHealth[30] = 0x00;
+            zeroMaxHealth[31] = 0x00;
+
+            Assert.Throws<ArgumentException>(
+                () =>
+                    PlayerStateSnapshotCodec.Decode(
+                        currentHealthAboveMax));
+
+            Assert.Throws<ArgumentException>(
+                () =>
+                    PlayerStateSnapshotCodec.Decode(
+                        zeroMaxHealth));
+        }
+
+        [Test]
+        public void PlayerStateDecodeZeroCurrentHealth_IsAcceptedAsDead()
+        {
+            var snapshot =
+                new PlayerStateSnapshotPayload(
+                    new[]
+                    {
+                new PlayerStateRecord(
+                    1u,
+                    0.0f,
+                    0.0f,
+                    1.0f,
+                    0.0f,
+                    false,
+                    false,
+                    0,
+                    100)
+                    });
+
+            byte[] encoded =
+                PlayerStateSnapshotCodec.Encode(snapshot);
+
+            PlayerStateSnapshotPayload decoded =
+                PlayerStateSnapshotCodec.Decode(encoded);
+
+            Assert.That(
+                decoded.Players[0].CurrentHealth,
+                Is.EqualTo((ushort)0));
+
+            Assert.That(
+                decoded.Players[0].MaxHealth,
+                Is.EqualTo((ushort)100));
         }
     }
 }

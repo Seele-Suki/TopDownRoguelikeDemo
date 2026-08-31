@@ -42,6 +42,12 @@ add_executable(NetworkServer
     src/net/PlayerShotEventForwarder.cpp
     src/net/PlayerShotgunEventForwarder.h
     src/net/PlayerShotgunEventForwarder.cpp
+    src/net/WorldStateForwarder.h
+    src/net/WorldStateForwarder.cpp
+    src/net/WorldEntitySpawnForwarder.h
+    src/net/WorldEntitySpawnForwarder.cpp
+    src/net/WorldEntityRemovalForwarder.h
+    src/net/WorldEntityRemovalForwarder.cpp
 
     src/protocol/MessageType.h
     src/protocol/MessageHeader.h
@@ -66,6 +72,12 @@ add_executable(NetworkServer
     src/protocol/PlayerShotEventCodec.cpp
     src/protocol/PlayerShotgunEventCodec.h
     src/protocol/PlayerShotgunEventCodec.cpp
+    src/protocol/WorldStateSnapshotCodec.h
+    src/protocol/WorldStateSnapshotCodec.cpp
+    src/protocol/WorldEntitySpawnedCodec.h
+    src/protocol/WorldEntitySpawnedCodec.cpp
+    src/protocol/WorldEntityRemovedCodec.h
+    src/protocol/WorldEntityRemovedCodec.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -515,6 +527,12 @@ add_executable(ServerLoopTests
     src/net/PlayerShotEventForwarder.cpp
     src/net/PlayerShotgunEventForwarder.h
     src/net/PlayerShotgunEventForwarder.cpp
+    src/net/WorldStateForwarder.h
+    src/net/WorldStateForwarder.cpp
+    src/net/WorldEntitySpawnForwarder.h
+    src/net/WorldEntitySpawnForwarder.cpp
+    src/net/WorldEntityRemovalForwarder.h
+    src/net/WorldEntityRemovalForwarder.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp
@@ -549,6 +567,12 @@ add_executable(ServerLoopTests
     src/protocol/PlayerShotEventCodec.cpp
     src/protocol/PlayerShotgunEventCodec.h
     src/protocol/PlayerShotgunEventCodec.cpp
+    src/protocol/WorldStateSnapshotCodec.h
+    src/protocol/WorldStateSnapshotCodec.cpp
+    src/protocol/WorldEntitySpawnedCodec.h
+    src/protocol/WorldEntitySpawnedCodec.cpp
+    src/protocol/WorldEntityRemovedCodec.h
+    src/protocol/WorldEntityRemovedCodec.cpp
 )
 
 target_include_directories(ServerLoopTests
@@ -811,6 +835,131 @@ endif()
 add_test(
     NAME PlayerSyncCodecTests
     COMMAND PlayerSyncCodecTests
+)
+
+add_executable(WorldStateSnapshotCodecTests
+    tests/WorldStateSnapshotCodecTests.cpp
+    src/protocol/WorldStateSnapshotCodec.h
+    src/protocol/WorldStateSnapshotCodec.cpp
+    src/protocol/NetworkByteOrder.h
+)
+
+target_include_directories(WorldStateSnapshotCodecTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(WorldStateSnapshotCodecTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(WorldStateSnapshotCodecTests
+        PRIVATE
+            ws2_32
+    )
+endif()
+
+add_test(
+    NAME WorldStateSnapshotCodecTests
+    COMMAND WorldStateSnapshotCodecTests
+)
+
+add_executable(WorldEntitySpawnedCodecTests
+    tests/WorldEntitySpawnedCodecTests.cpp
+    src/protocol/WorldEntitySpawnedCodec.h
+    src/protocol/WorldEntitySpawnedCodec.cpp
+    src/protocol/WorldEntityRemovedCodec.h
+    src/protocol/WorldEntityRemovedCodec.cpp
+    src/protocol/WorldStateSnapshotCodec.h
+    src/protocol/WorldStateSnapshotCodec.cpp
+    src/protocol/NetworkByteOrder.h
+)
+
+target_include_directories(WorldEntitySpawnedCodecTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(WorldEntitySpawnedCodecTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(WorldEntitySpawnedCodecTests
+        PRIVATE
+            ws2_32
+    )
+endif()
+
+add_test(
+    NAME WorldEntitySpawnedCodecTests
+    COMMAND WorldEntitySpawnedCodecTests
+)
+
+add_executable(WorldEntitySpawnForwarderTests
+    tests/WorldEntitySpawnForwarderTests.cpp
+
+    src/net/WorldEntitySpawnForwarder.h
+    src/net/WorldEntitySpawnForwarder.cpp
+    src/net/WorldEntityRemovalForwarder.h
+    src/net/WorldEntityRemovalForwarder.cpp
+    src/net/TcpClientSession.h
+    src/net/TcpClientSession.cpp
+
+    src/room/ClientState.h
+    src/room/ClientState.cpp
+    src/room/Room.h
+    src/room/Room.cpp
+    src/room/RoomManager.h
+    src/room/RoomManager.cpp
+    src/room/PlayerIdAllocator.h
+    src/room/PlayerIdAllocator.cpp
+    src/room/SessionTokenGenerator.h
+    src/room/SessionTokenGenerator.cpp
+
+    src/protocol/PacketCodec.h
+    src/protocol/PacketCodec.cpp
+    src/protocol/MessageType.h
+    src/protocol/MessageHeader.h
+    src/protocol/NetworkByteOrder.h
+    src/protocol/SessionTokenCodec.h
+    src/protocol/SessionTokenCodec.cpp
+    src/protocol/UdpMessageHeader.h
+    src/protocol/WorldEntitySpawnedCodec.h
+    src/protocol/WorldEntitySpawnedCodec.cpp
+    src/protocol/WorldEntityRemovedCodec.h
+    src/protocol/WorldEntityRemovedCodec.cpp
+    src/protocol/WorldStateSnapshotCodec.h
+    src/protocol/WorldStateSnapshotCodec.cpp
+)
+
+target_include_directories(WorldEntitySpawnForwarderTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(WorldEntitySpawnForwarderTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(WorldEntitySpawnForwarderTests
+        PRIVATE
+            ws2_32
+            bcrypt
+    )
+endif()
+
+add_test(
+    NAME WorldEntitySpawnForwarderTests
+    COMMAND WorldEntitySpawnForwarderTests
 )
 
 add_executable(PlayerShotEventForwarderTests

@@ -7,6 +7,7 @@
 #include "net/PlayerStateForwarder.h"
 #include "net/PlayerShotEventForwarder.h"
 #include "net/PlayerShotgunEventForwarder.h"
+#include "net/WorldStateForwarder.h"
 
 #include <chrono>
 #include <functional>
@@ -45,6 +46,7 @@ namespace tdr::net
         PlayerInputForwarder playerInputForwarder_;
         PlayerShotEventForwarder playerShotEventForwarder_;
         PlayerShotgunEventForwarder playerShotgunEventForwarder_;
+        WorldStateForwarder worldStateForwarder_;
         SelectLoop selectLoop_;
     };
 }

@@ -66,6 +66,14 @@ namespace
                 );
             }
 
+            if (player.maxHealth == 0U ||
+                player.currentHealth > player.maxHealth)
+            {
+                throw std::invalid_argument(
+                    "Player state contains an invalid health range."
+                );
+            }
+
             if (index == 0U)
             {
                 continue;
@@ -88,6 +96,26 @@ namespace
                 );
             }
         }
+    }
+
+    void AppendNetwork16(
+        std::vector<std::uint8_t>& output,
+        const std::uint16_t value
+    )
+    {
+        const std::uint16_t networkValue =
+            tdr::protocol::HostToNetwork16(value);
+
+        const auto* bytes =
+            reinterpret_cast<const std::uint8_t*>(
+                &networkValue
+                );
+
+        output.insert(
+            output.end(),
+            bytes,
+            bytes + sizeof(networkValue)
+        );
     }
 
     void AppendNetwork32(
@@ -124,6 +152,26 @@ namespace
         );
 
         AppendNetwork32(output, bits);
+    }
+
+    std::uint16_t ReadNetwork16(
+        const std::uint8_t* data,
+        std::size_t& offset
+    )
+    {
+        std::uint16_t networkValue = 0U;
+
+        std::memcpy(
+            &networkValue,
+            data + offset,
+            sizeof(networkValue)
+        );
+
+        offset += sizeof(networkValue);
+
+        return tdr::protocol::NetworkToHost16(
+            networkValue
+        );
     }
 
     std::uint32_t ReadNetwork32(
@@ -241,6 +289,16 @@ namespace tdr::protocol
                 encoded,
                 player.flags & kKnownFlags
             );
+
+            AppendNetwork16(
+                encoded,
+                player.currentHealth
+            );
+
+            AppendNetwork16(
+                encoded,
+                player.maxHealth
+            );
         }
 
         return encoded;
@@ -312,6 +370,12 @@ namespace tdr::protocol
             const std::uint32_t flags =
                 ReadNetwork32(data, offset);
 
+            const std::uint16_t currentHealth =
+                ReadNetwork16(data, offset);
+
+            const std::uint16_t maxHealth =
+                ReadNetwork16(data, offset);
+
             if ((flags & ~kKnownFlags) != 0U)
             {
                 throw std::invalid_argument(
@@ -321,6 +385,12 @@ namespace tdr::protocol
 
             player.flags =
                 flags;
+
+            player.currentHealth =
+                currentHealth;
+
+            player.maxHealth =
+                maxHealth;
 
             snapshot.players.push_back(
                 std::move(player)

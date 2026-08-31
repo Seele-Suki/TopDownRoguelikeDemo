@@ -1,5 +1,7 @@
 using TopDownRoguelike.Gameplay.Combat;
 using TopDownRoguelike.Gameplay.Experience;
+using TopDownRoguelike.Infrastructure;
+using TopDownRoguelike.Networking.Protocol;
 using UnityEngine;
 using System;
 
@@ -11,7 +13,23 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
         [SerializeField] private int currentHealth;
         [SerializeField] private float healthMultiplier = 1f;
+        private int maxHealth;
         private bool isDead;
+
+        public int CurrentHealth =>
+            currentHealth;
+
+        public int MaxHealth =>
+            maxHealth;
+
+        public bool IsDead =>
+            isDead;
+
+        public NetworkEnemyArchetype NetworkArchetype =>
+            enemyData != null
+                ? enemyData.NetworkArchetype
+                : NetworkEnemyArchetype.Basic;
+
         public event Action OnDied;
 
         private void Awake()
@@ -21,12 +39,17 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
         public void TakeDamage(DamageInfo damageInfo)
         {
-            if (isDead)
+            if (GameSession.IsClient ||
+                isDead)
             {
                 return;
             }
 
-            currentHealth -= damageInfo.Damage;
+            currentHealth =
+                Mathf.Max(
+                    0,
+                    currentHealth -
+                    damageInfo.Damage);
 
             Debug.Log($"Enemy took {damageInfo.Damage} damage. Current health: {currentHealth}");
 
@@ -34,6 +57,46 @@ namespace TopDownRoguelike.Gameplay.Enemies
             {
                 Die();
             }
+        }
+
+        public bool ApplyAuthoritativeState(
+            int authoritativeCurrentHealth,
+            int authoritativeMaxHealth,
+            bool authoritativeIsDead)
+        {
+            if (!GameSession.IsClient)
+            {
+                return false;
+            }
+
+            if (authoritativeMaxHealth < 1 ||
+                authoritativeMaxHealth > ushort.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(authoritativeMaxHealth));
+            }
+
+            if (authoritativeCurrentHealth < 0 ||
+                authoritativeCurrentHealth >
+                    authoritativeMaxHealth)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(authoritativeCurrentHealth));
+            }
+
+            if (authoritativeIsDead !=
+                (authoritativeCurrentHealth == 0))
+            {
+                throw new ArgumentException(
+                    "Enemy death state must match current health.",
+                    nameof(authoritativeIsDead));
+            }
+
+            maxHealth = authoritativeMaxHealth;
+            currentHealth = authoritativeCurrentHealth;
+            isDead = authoritativeIsDead;
+
+            return true;
         }
 
         private void Die()
@@ -70,11 +133,19 @@ namespace TopDownRoguelike.Gameplay.Enemies
         private void ResetHealth()
         {
             int baseHealth =
-                enemyData != null ? enemyData.MaxHealth : 3;
+                enemyData != null
+                    ? enemyData.MaxHealth
+                    : 3;
 
-            currentHealth = Mathf.Max(
-                1,
-                Mathf.RoundToInt(baseHealth * healthMultiplier));
+            maxHealth =
+                Mathf.Max(
+                    1,
+                    Mathf.RoundToInt(
+                        baseHealth *
+                        healthMultiplier));
+
+            currentHealth =
+                maxHealth;
         }
     }
 }

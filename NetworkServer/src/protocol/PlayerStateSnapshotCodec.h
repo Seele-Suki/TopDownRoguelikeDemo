@@ -10,7 +10,7 @@ namespace tdr::protocol
         kPlayerStateSnapshotPrefixSize = 4U;
 
     inline constexpr std::size_t
-        kPlayerStateRecordSize = 24U;
+        kPlayerStateRecordSize = 28U;
 
     inline constexpr std::size_t
         kMaxPlayerStateRecords = 4U;
@@ -23,6 +23,8 @@ namespace tdr::protocol
         float aimX = 0.0F;
         float aimY = 0.0F;
         std::uint32_t flags = 0U;
+        std::uint16_t currentHealth = 1U;
+        std::uint16_t maxHealth = 1U;
     };
 
     struct PlayerStateSnapshotPayload final

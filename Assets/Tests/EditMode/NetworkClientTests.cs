@@ -1082,6 +1082,275 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void NetworkClient_ExposesWorldStateSnapshotReceived()
+        {
+            Type clientType =
+                typeof(NetworkClient);
+
+            EventInfo eventInfo =
+                clientType.GetEvent(
+                    "WorldStateSnapshotReceived",
+                    BindingFlags.Instance |
+                    BindingFlags.Public);
+
+            Assert.That(
+                eventInfo,
+                Is.Not.Null,
+                "NetworkClient must expose " +
+                "WorldStateSnapshotReceived.");
+
+            Assert.That(
+                eventInfo.EventHandlerType,
+                Is.EqualTo(
+                    typeof(Action<
+                        uint,
+                        uint,
+                        WorldStateSnapshotPayload>)));
+        }
+
+        [Test]
+        public void NetworkClient_ExposesWorldEntitySpawnedReceived()
+        {
+            EventInfo eventInfo =
+                typeof(NetworkClient).GetEvent(
+                    "WorldEntitySpawnedReceived",
+                    BindingFlags.Instance |
+                    BindingFlags.Public);
+
+            Assert.That(
+                eventInfo,
+                Is.Not.Null,
+                "NetworkClient must expose " +
+                "WorldEntitySpawnedReceived.");
+
+            Assert.That(
+                eventInfo.EventHandlerType,
+                Is.EqualTo(
+                    typeof(Action<WorldEntityRecord>)));
+        }
+
+        [Test]
+        public void ForwardedWorldEntityRemoved_RaisesDecodedRemovalEvent()
+        {
+            var client = new NetworkClient();
+
+            try
+            {
+                WorldEntityRemovedPayload received = null;
+                client.WorldEntityRemovedReceived += value => received = value;
+
+                SetClientState(client, NetworkClientState.InRoom);
+
+                DispatchTransportEvent(
+                    client,
+                    NetworkTransportEvent.PacketReceived(
+                        NetworkTransportKind.Tcp,
+                        MessageType.WorldEntityRemoved,
+                        WorldEntityRemovedCodec.Encode(
+                            new WorldEntityRemovedPayload(
+                                0x10000044u,
+                                NetworkEntityType.Enemy,
+                                WorldEntityRemovalReason.Died))));
+
+                Assert.That(received, Is.Not.Null);
+                Assert.That(received.EntityId, Is.EqualTo(0x10000044u));
+                Assert.That(received.Reason, Is.EqualTo(WorldEntityRemovalReason.Died));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
+        public void SendWorldEntityRemoved_WhenNotInRoom_RejectsSend()
+        {
+            var client = new NetworkClient();
+
+            try
+            {
+                Assert.Throws<InvalidOperationException>(
+                    () => client.SendWorldEntityRemoved(
+                        new WorldEntityRemovedPayload(
+                            1u,
+                            NetworkEntityType.Enemy,
+                            WorldEntityRemovalReason.Died)));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
+        public void SendWorldEntitySpawned_WhenNotInRoom_RejectsSend()
+        {
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                WorldEntityRecord record =
+                    CreateEnemySpawnRecord();
+
+                InvalidOperationException exception =
+                    Assert.Throws<InvalidOperationException>(
+                        () => client.SendWorldEntitySpawned(
+                            record));
+
+                Assert.That(
+                    exception.Message,
+                    Does.Contain("in a room"));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
+        public void ForwardedWorldEntitySpawned_RaisesDecodedSpawnEvent()
+        {
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                WorldEntityRecord receivedRecord =
+                    null;
+
+                client.WorldEntitySpawnedReceived +=
+                    record => receivedRecord = record;
+
+                SetClientState(
+                    client,
+                    NetworkClientState.InRoom);
+
+                WorldEntityRecord expectedRecord =
+                    CreateEnemySpawnRecord();
+
+                DispatchTransportEvent(
+                    client,
+                    NetworkTransportEvent.PacketReceived(
+                        NetworkTransportKind.Tcp,
+                        MessageType.WorldEntitySpawned,
+                        WorldEntitySpawnedCodec.Encode(
+                            expectedRecord)));
+
+                Assert.That(receivedRecord, Is.Not.Null);
+                Assert.That(
+                    receivedRecord.EntityId,
+                    Is.EqualTo(expectedRecord.EntityId));
+                Assert.That(
+                    receivedRecord.Lifecycle,
+                    Is.EqualTo(WorldEntityLifecycle.Spawn));
+                Assert.That(
+                    receivedRecord.EnemyArchetype,
+                    Is.EqualTo(NetworkEnemyArchetype.Fast));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
+        public void ForwardedWorldStateSnapshot_RaisesDecodedWorldEvent()
+        {
+            var client =
+                new NetworkClient();
+
+            try
+            {
+                uint receivedSenderId =
+                    0u;
+
+                uint receivedSequence =
+                    0u;
+
+                WorldStateSnapshotPayload
+                    receivedSnapshot = null;
+
+                client.WorldStateSnapshotReceived +=
+                    (senderId, sequence, snapshot) =>
+                    {
+                        receivedSenderId =
+                            senderId;
+
+                        receivedSequence =
+                            sequence;
+
+                        receivedSnapshot =
+                            snapshot;
+                    };
+
+                SetClientState(
+                    client,
+                    NetworkClientState.InRoom);
+
+                var expectedSnapshot =
+                    new WorldStateSnapshotPayload(
+                        new[]
+                        {
+                    new WorldEntityRecord(
+                        11u,
+                        NetworkEntityType.Player,
+                        WorldEntityLifecycle.Snapshot,
+                        WorldEntityFlags.Active,
+                        3f,
+                        -2f,
+                        45f,
+                        10,
+                        10)
+                        });
+
+                byte[] payload =
+                    WorldStateSnapshotCodec.Encode(
+                        expectedSnapshot);
+
+                DispatchTransportEvent(
+                    client,
+                    NetworkTransportEvent.UdpPacketReceived(
+                        MessageType.WorldStateSnapshot,
+                        7u,
+                        31u,
+                        payload));
+
+                Assert.That(
+                    receivedSenderId,
+                    Is.EqualTo(7u));
+
+                Assert.That(
+                    receivedSequence,
+                    Is.EqualTo(31u));
+
+                Assert.That(
+                    receivedSnapshot,
+                    Is.Not.Null);
+
+                Assert.That(
+                    receivedSnapshot.Entities,
+                    Has.Count.EqualTo(1));
+
+                Assert.That(
+                    receivedSnapshot.Entities[0].EntityId,
+                    Is.EqualTo(11u));
+
+                Assert.That(
+                    receivedSnapshot.Entities[0].PositionX,
+                    Is.EqualTo(3f));
+
+                Assert.That(
+                    receivedSnapshot.Entities[0].CurrentHealth,
+                    Is.EqualTo(10));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
         public void ForwardedPlayerStateSnapshot_RaisesDecodedStateEvent()
         {
             var client =
@@ -1481,6 +1750,23 @@ namespace TopDownRoguelike.Tests.EditMode
             }
 
             return token;
+        }
+
+        private static WorldEntityRecord
+            CreateEnemySpawnRecord()
+        {
+            return new WorldEntityRecord(
+                0x10000001u,
+                NetworkEntityType.Enemy,
+                WorldEntityLifecycle.Spawn,
+                WorldEntityFlags.Active,
+                2f,
+                -3f,
+                0f,
+                3,
+                3,
+                0,
+                NetworkEnemyArchetype.Fast);
         }
     }
 }

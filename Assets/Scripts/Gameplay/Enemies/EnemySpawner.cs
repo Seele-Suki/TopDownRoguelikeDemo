@@ -2,6 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TopDownRoguelike.Gameplay.Core;
+using TopDownRoguelike.Infrastructure;
+using TopDownRoguelike.Networking.Gameplay;
+using TopDownRoguelike.Networking.Protocol;
 
 namespace TopDownRoguelike.Gameplay.Enemies
 {
@@ -26,6 +29,11 @@ namespace TopDownRoguelike.Gameplay.Enemies
         private float nextSpawnTime;
 
         private readonly List<GameObject> spawnedEnemies = new List<GameObject>();
+
+        public event System.Action<GameObject> EnemySpawned;
+
+        private uint nextNetworkEntityId =
+            0x10000001u;
 
         [Header("Runtime Debug")]
         [SerializeField] private float currentSpawnInterval;
@@ -81,7 +89,36 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
                 return;
             }
-            GameObject spawnedEnemy = Instantiate(enemyPrefab,spawnPosition,Quaternion.identity);
+            TryCreateSpawnedEnemy(
+                enemyPrefab,
+                spawnPosition,
+                out _);
+        }
+
+        private bool TryCreateSpawnedEnemy(
+            GameObject enemyPrefab,
+            Vector3 spawnPosition,
+            out GameObject spawnedEnemy)
+        {
+            spawnedEnemy = null;
+
+            if (GameSession.IsClient ||
+                enemyPrefab == null)
+            {
+                return false;
+            }
+
+            spawnedEnemy = Instantiate(
+                enemyPrefab,
+                spawnPosition,
+                Quaternion.identity);
+
+            if (!EnsureNetworkEntityId(spawnedEnemy))
+            {
+                Destroy(spawnedEnemy);
+                spawnedEnemy = null;
+                return false;
+            }
 
             if (spawnedEnemy.TryGetComponent(
                     out EnemyHealth enemyHealth))
@@ -100,6 +137,8 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
             spawnedEnemies.Add(spawnedEnemy);
             currentAliveEnemies = spawnedEnemies.Count;
+            EnemySpawned?.Invoke(spawnedEnemy);
+            return true;
         }
 
         private bool TryGetSpawnPosition(out Vector3 spawnPosition)
@@ -264,6 +303,19 @@ namespace TopDownRoguelike.Gameplay.Enemies
                 "EnemySpawner cleared all regular enemies.");
         }
 
+        public IEnumerable<GameObject>
+    EnumerateSpawnedEnemies()
+        {
+            foreach (GameObject enemy
+                in spawnedEnemies)
+            {
+                if (enemy != null)
+                {
+                    yield return enemy;
+                }
+            }
+        }
+
         private void HandleEnemyDied()
         {
             gameManager.NotifyEnemyKilled();
@@ -303,6 +355,37 @@ namespace TopDownRoguelike.Gameplay.Enemies
             }
 
             return null;
+        }
+
+        private bool EnsureNetworkEntityId(
+            GameObject enemy)
+        {
+            if (enemy == null)
+            {
+                return false;
+            }
+
+            NetworkEntityId identifier =
+                enemy.GetComponent<NetworkEntityId>();
+
+            if (identifier == null)
+            {
+                identifier =
+                    enemy.AddComponent<NetworkEntityId>();
+            }
+
+            if (identifier.IsAssigned)
+            {
+                return identifier.EntityType ==
+                    NetworkEntityType.Enemy;
+            }
+
+            uint entityId =
+                nextNetworkEntityId++;
+
+            return identifier.TryAssign(
+                entityId,
+                NetworkEntityType.Enemy);
         }
     }
 }

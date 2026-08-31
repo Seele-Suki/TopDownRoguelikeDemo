@@ -49,7 +49,7 @@ namespace TopDownRoguelike.Tests.EditMode
 
             Assert.That(
                 encoded.Length,
-                Is.EqualTo(28));
+                Is.EqualTo(32));
 
             Assert.That(
                 encoded[27],

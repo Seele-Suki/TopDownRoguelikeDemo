@@ -49,6 +49,14 @@ namespace tdr::net
         std::vector<std::string>
             TakeClosedRoomIds();
 
+        [[nodiscard]]
+        std::vector<std::vector<std::uint8_t>>
+            TakeWorldEntitySpawnPayloads();
+
+        [[nodiscard]]
+        std::vector<std::vector<std::uint8_t>>
+            TakeWorldEntityRemovalPayloads();
+
         void LeaveRoom();
 
         [[nodiscard]]
@@ -159,5 +167,11 @@ namespace tdr::net
 
         std::vector<std::string>
             closedRoomIds_;
+
+        std::vector<std::vector<std::uint8_t>>
+            worldEntitySpawnPayloads_;
+
+        std::vector<std::vector<std::uint8_t>>
+            worldEntityRemovalPayloads_;
     };
 }

@@ -28,6 +28,18 @@ namespace TopDownRoguelike.Networking.Protocol
         PlayerInput = 34,
         PlayerStateSnapshot = 35,
         PlayerShotEvent = 36,
-        PlayerShotgunEvent = 37
+        PlayerShotgunEvent = 37,
+        WorldStateSnapshot = 40,
+
+        WorldEntitySpawned = 41,
+        WorldEntityRemoved = 42,
+        PlayerDied = 43,
+        ExperienceOrbSpawned = 44,
+        ExperienceOrbCollected = 45,
+        UpgradeStarted = 46,
+        UpgradeChoiceSubmitted = 47,
+        UpgradeCompleted = 48,
+        BossPhaseChanged = 49,
+        GameResult = 50
     }
 }

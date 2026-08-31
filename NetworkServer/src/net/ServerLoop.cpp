@@ -4,6 +4,8 @@
 #include "net/TcpConnection.h"
 #include "net/TcpListener.h"
 #include "net/UdpSocket.h"
+#include "net/WorldEntitySpawnForwarder.h"
+#include "net/WorldEntityRemovalForwarder.h"
 #include "protocol/UdpBindingCredentialsCodec.h"
 #include "protocol/UdpPacketCodec.h"
 
@@ -30,6 +32,7 @@ namespace tdr::net
         playerStateForwarder_(coordinator),
         playerShotEventForwarder_(coordinator),
         playerShotgunEventForwarder_(coordinator)
+        , worldStateForwarder_(coordinator)
     {
         if (!listener_.IsListening())
         {
@@ -206,6 +209,25 @@ namespace tdr::net
                         break;
                     }
 
+                    case tdr::protocol::MessageType::
+                    WorldStateSnapshot:
+                    {
+                        auto forwarded =
+                            worldStateForwarder_.Forward(
+                                receiveBuffer.data(),
+                                receivedByteCount,
+                                sourceAddress);
+
+                        response =
+                            std::move(
+                                forwarded.bytes);
+
+                        responseDestination =
+                            forwarded.destination;
+
+                        break;
+                    }
+
                     default:
                         throw std::invalid_argument(
                             "Unsupported UDP message type."
@@ -344,6 +366,76 @@ namespace tdr::net
                 static_cast<std::size_t>(
                     receivedByteCount)
             );
+
+            const auto spawnPayloads =
+                session.TakeWorldEntitySpawnPayloads();
+
+            for (const auto& spawnPayload :
+                spawnPayloads)
+            {
+                try
+                {
+                    const auto forwarded =
+                        WorldEntitySpawnForwarder::Forward(
+                            session,
+                            spawnPayload);
+
+                    coordinator_.SendPacketToPlayer(
+                        forwarded.targetPlayerId,
+                        tdr::protocol::MessageType::
+                            WorldEntitySpawned,
+                        forwarded.payload);
+                }
+                catch (const std::exception& exception)
+                {
+                    const std::string errorMessage =
+                        exception.what();
+
+                    const std::vector<std::uint8_t>
+                        errorPayload(
+                            errorMessage.begin(),
+                            errorMessage.end());
+
+                    coordinator_.SendPacketToPlayer(
+                        session.PlayerId(),
+                        tdr::protocol::MessageType::
+                            ErrorMessage,
+                        errorPayload);
+                }
+            }
+
+            const auto removalPayloads =
+                session.TakeWorldEntityRemovalPayloads();
+
+            for (const auto& removalPayload : removalPayloads)
+            {
+                try
+                {
+                    const auto forwarded =
+                        WorldEntityRemovalForwarder::Forward(
+                            session,
+                            removalPayload);
+
+                    coordinator_.SendPacketToPlayer(
+                        forwarded.targetPlayerId,
+                        tdr::protocol::MessageType::
+                            WorldEntityRemoved,
+                        forwarded.payload);
+                }
+                catch (const std::exception& exception)
+                {
+                    const std::string errorMessage =
+                        exception.what();
+                    const std::vector<std::uint8_t> errorPayload(
+                        errorMessage.begin(),
+                        errorMessage.end());
+
+                    coordinator_.SendPacketToPlayer(
+                        session.PlayerId(),
+                        tdr::protocol::MessageType::ErrorMessage,
+                        errorPayload);
+                }
+            }
 
             const auto outgoingPackets =
                 session.TakeOutgoingPackets();

@@ -101,6 +101,18 @@ namespace TopDownRoguelike.Networking.Client
 
         public event Action<
             uint,
+            uint,
+            WorldStateSnapshotPayload>
+            WorldStateSnapshotReceived;
+
+        public event Action<WorldEntityRecord>
+            WorldEntitySpawnedReceived;
+
+        public event Action<WorldEntityRemovedPayload>
+            WorldEntityRemovedReceived;
+
+        public event Action<
+            uint,
             PlayerShotEvent>
             PlayerShotEventReceived;
 
@@ -525,6 +537,115 @@ namespace TopDownRoguelike.Networking.Client
             }
         }
 
+        public void SendWorldStateSnapshot(
+            WorldStateSnapshotPayload snapshot)
+        {
+            ThrowIfDisposed();
+
+            if (State !=
+                NetworkClientState.InRoom)
+            {
+                throw new InvalidOperationException(
+                    "Network client must be in a room " +
+                    "before sending a world state snapshot.");
+            }
+
+            byte[] payload =
+                WorldStateSnapshotCodec.Encode(
+                    snapshot);
+
+            uint sequence =
+                nextUdpSequence;
+
+            nextUdpSequence =
+                unchecked(
+                    nextUdpSequence + 1u);
+
+            try
+            {
+                udpTransport.Send(
+                    MessageType.WorldStateSnapshot,
+                    sequence,
+                    payload);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
+        public void SendWorldEntitySpawned(
+            WorldEntityRecord record)
+        {
+            ThrowIfDisposed();
+
+            if (State !=
+                NetworkClientState.InRoom)
+            {
+                throw new InvalidOperationException(
+                    "Network client must be in a room " +
+                    "before sending a world entity spawn.");
+            }
+
+            if (!GameSession.IsHost)
+            {
+                throw new InvalidOperationException(
+                    "Only the room host can send " +
+                    "a world entity spawn.");
+            }
+
+            byte[] payload =
+                WorldEntitySpawnedCodec.Encode(
+                    record);
+
+            try
+            {
+                tcpTransport.Send(
+                    MessageType.WorldEntitySpawned,
+                    payload);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
+        public void SendWorldEntityRemoved(
+            WorldEntityRemovedPayload removed)
+        {
+            ThrowIfDisposed();
+
+            if (State != NetworkClientState.InRoom)
+            {
+                throw new InvalidOperationException(
+                    "Network client must be in a room " +
+                    "before sending a world entity removal.");
+            }
+
+            if (!GameSession.IsHost)
+            {
+                throw new InvalidOperationException(
+                    "Only the room host can send " +
+                    "a world entity removal.");
+            }
+
+            byte[] payload =
+                WorldEntityRemovedCodec.Encode(removed);
+
+            try
+            {
+                tcpTransport.Send(
+                    MessageType.WorldEntityRemoved,
+                    payload);
+            }
+            catch (Exception exception)
+            {
+                Fail(exception.Message);
+            }
+        }
+
         public void SendPlayerShotEvent(
             PlayerShotEvent shotEvent)
         {
@@ -845,6 +966,46 @@ namespace TopDownRoguelike.Networking.Client
             }
 
             if (transportEvent.TransportKind ==
+                NetworkTransportKind.Tcp &&
+                transportEvent.PacketType ==
+                MessageType.WorldEntitySpawned &&
+                State ==
+                NetworkClientState.InRoom)
+            {
+                HandleWorldEntitySpawned(
+                    transportEvent.Payload);
+
+                return;
+            }
+
+            if (transportEvent.TransportKind ==
+                NetworkTransportKind.Tcp &&
+                transportEvent.PacketType ==
+                MessageType.WorldEntityRemoved &&
+                State == NetworkClientState.InRoom)
+            {
+                HandleWorldEntityRemoved(
+                    transportEvent.Payload);
+
+                return;
+            }
+
+            if (transportEvent.TransportKind ==
+                NetworkTransportKind.Udp &&
+                transportEvent.PacketType ==
+                MessageType.WorldStateSnapshot &&
+                State ==
+                NetworkClientState.InRoom)
+            {
+                HandleWorldStateSnapshot(
+                    transportEvent.PlayerId,
+                    transportEvent.Sequence,
+                    transportEvent.Payload);
+
+                return;
+            }
+
+            if (transportEvent.TransportKind ==
                 NetworkTransportKind.Udp &&
                 transportEvent.PacketType ==
                 MessageType.PlayerShotEvent &&
@@ -1107,6 +1268,71 @@ namespace TopDownRoguelike.Networking.Client
             {
                 Fail(
                     exception.Message);
+            }
+        }
+
+        private void HandleWorldStateSnapshot(
+            uint senderPlayerId,
+            uint sequence,
+            byte[] payload)
+        {
+            try
+            {
+                if (senderPlayerId == 0u)
+                {
+                    throw new InvalidOperationException(
+                        "World state snapshot contains " +
+                        "an invalid sender ID.");
+                }
+
+                WorldStateSnapshotPayload snapshot =
+                    WorldStateSnapshotCodec.Decode(
+                        payload);
+
+                WorldStateSnapshotReceived?.Invoke(
+                    senderPlayerId,
+                    sequence,
+                    snapshot);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
+        private void HandleWorldEntitySpawned(
+            byte[] payload)
+        {
+            try
+            {
+                WorldEntityRecord record =
+                    WorldEntitySpawnedCodec.Decode(
+                        payload);
+
+                WorldEntitySpawnedReceived?.Invoke(
+                    record);
+            }
+            catch (Exception exception)
+            {
+                Fail(
+                    exception.Message);
+            }
+        }
+
+        private void HandleWorldEntityRemoved(
+            byte[] payload)
+        {
+            try
+            {
+                WorldEntityRemovedPayload removed =
+                    WorldEntityRemovedCodec.Decode(payload);
+
+                WorldEntityRemovedReceived?.Invoke(removed);
+            }
+            catch (Exception exception)
+            {
+                Fail(exception.Message);
             }
         }
 

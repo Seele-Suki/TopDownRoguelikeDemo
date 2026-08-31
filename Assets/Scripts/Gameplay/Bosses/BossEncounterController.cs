@@ -2,6 +2,8 @@ using System.Collections;
 using TopDownRoguelike.Gameplay.Core;
 using TopDownRoguelike.Gameplay.Enemies;
 using TopDownRoguelike.Gameplay.UI;
+using TopDownRoguelike.Networking.Gameplay;
+using TopDownRoguelike.Networking.Protocol;
 using UnityEngine;
 
 namespace TopDownRoguelike.Gameplay.Bosses
@@ -27,11 +29,17 @@ namespace TopDownRoguelike.Gameplay.Bosses
         [SerializeField, Min(0f)]
         private float spawnPadding = 2f;
 
+        private const uint BossEntityId =
+            0x20000001u;
+
         [Header("Runtime Debug")]
         [SerializeField] private bool encounterStarted;
         [SerializeField] private GameObject currentBoss;
 
         private BossHealth currentBossHealth;
+
+        public GameObject CurrentBoss =>
+            currentBoss;
 
         private void Awake()
         {
@@ -104,6 +112,34 @@ namespace TopDownRoguelike.Gameplay.Bosses
                 bossPrefab,
                 spawnPosition,
                 Quaternion.identity);
+
+            NetworkEntityId identifier =
+                currentBoss.GetComponent<NetworkEntityId>();
+
+            if (identifier == null)
+            {
+                identifier =
+                    currentBoss.AddComponent<NetworkEntityId>();
+            }
+
+            if (!identifier.IsAssigned &&
+                !identifier.TryAssign(
+                    BossEntityId,
+                    NetworkEntityType.Boss))
+            {
+                Destroy(currentBoss);
+                currentBoss = null;
+                yield break;
+            }
+
+            if (identifier.IsAssigned &&
+                (identifier.EntityId != BossEntityId ||
+                 identifier.EntityType != NetworkEntityType.Boss))
+            {
+                Destroy(currentBoss);
+                currentBoss = null;
+                yield break;
+            }
 
             if (!currentBoss.TryGetComponent(
                     out currentBossHealth))

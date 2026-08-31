@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 90f73ddda96066a4295b14012dfbd02e, type: 3}
   m_Name: BasicEnemyData
   m_EditorClassIdentifier: 
+  networkArchetype: 1
   maxHealth: 3
   moveSpeed: 2
   stopDistance: 1.1

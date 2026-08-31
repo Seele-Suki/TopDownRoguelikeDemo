@@ -110,6 +110,26 @@ namespace tdr::net
         return roomIds;
     }
 
+    std::vector<std::vector<std::uint8_t>>
+    TcpClientSession::TakeWorldEntitySpawnPayloads()
+    {
+        std::vector<std::vector<std::uint8_t>> payloads;
+
+        payloads.swap(
+            worldEntitySpawnPayloads_
+        );
+
+        return payloads;
+    }
+
+    std::vector<std::vector<std::uint8_t>>
+        TcpClientSession::TakeWorldEntityRemovalPayloads()
+    {
+        std::vector<std::vector<std::uint8_t>> payloads;
+        payloads.swap(worldEntityRemovalPayloads_);
+        return payloads;
+    }
+
     void TcpClientSession::LeaveRoom()
     {
         if (!HasRoom())
@@ -599,6 +619,26 @@ namespace tdr::net
                     changedRoomId
                 );
             }
+
+            return;
+        }
+
+        if (packet.type ==
+            tdr::protocol::MessageType::WorldEntitySpawned)
+        {
+            worldEntitySpawnPayloads_.push_back(
+                packet.payload
+            );
+
+            return;
+        }
+
+        if (packet.type ==
+            tdr::protocol::MessageType::WorldEntityRemoved)
+        {
+            worldEntityRemovalPayloads_.push_back(
+                packet.payload
+            );
 
             return;
         }

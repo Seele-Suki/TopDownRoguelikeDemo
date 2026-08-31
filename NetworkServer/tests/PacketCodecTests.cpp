@@ -535,6 +535,65 @@ namespace
         );
     }
 
+    void WorldStateSnapshotMessageTypeUsesStableUdpValue()
+    {
+        using namespace tdr::protocol;
+
+        const auto messageType =
+            static_cast<MessageType>(40U);
+
+        Require(
+            IsKnownMessageType(messageType),
+            "WorldStateSnapshot is not a known message type."
+        );
+
+        Require(
+            IsUdpMessageType(messageType),
+            "WorldStateSnapshot is not classified as UDP."
+        );
+    }
+
+    void Phase6BattleMessageTypesUseStableTcpValues()
+    {
+        using namespace tdr::protocol;
+
+        const std::uint16_t expectedValues[] =
+        {
+            41U,
+            42U,
+            43U,
+            44U,
+            45U,
+            46U,
+            47U,
+            48U,
+            49U,
+            50U
+        };
+
+        for (const std::uint16_t rawValue
+            : expectedValues)
+        {
+            const auto messageType =
+                static_cast<MessageType>(
+                    rawValue);
+
+            Require(
+                IsKnownMessageType(
+                    messageType),
+                "Phase 6 battle event is not known."
+            );
+
+            Require(
+                !IsUdpMessageType(
+                    messageType),
+                "Phase 6 battle event was classified as UDP."
+            );
+        }
+    }
+
+
+
     bool RunTest(
         const char* const name,
         void (*test)()
@@ -561,6 +620,18 @@ namespace
 int main()
 {
     int failedTests = 0;
+
+    failedTests += !RunTest(
+        "Phase6BattleMessageTypesUseStableTcpValues",
+        Phase6BattleMessageTypesUseStableTcpValues
+    );
+
+
+    failedTests += !RunTest(
+        "WorldStateSnapshotMessageTypeUsesStableUdpValue",
+        WorldStateSnapshotMessageTypeUsesStableUdpValue
+    );
+
 
     failedTests += !RunTest(
         "EncodeEmptyPayloadUsesExpectedBytes",

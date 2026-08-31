@@ -303,6 +303,8 @@ namespace TopDownRoguelike.Networking.Transport
             header.Type ==
                 MessageType.PlayerStateSnapshot ||
             header.Type ==
+                MessageType.WorldStateSnapshot ||
+            header.Type ==
                 MessageType.PlayerShotEvent ||
             header.Type ==
                 MessageType.PlayerShotgunEvent)

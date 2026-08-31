@@ -31,6 +31,29 @@ namespace TopDownRoguelike.Networking.Protocol
             float aimY,
             bool fireHeld,
             bool isDashing)
+            : this(
+                playerId,
+                positionX,
+                positionY,
+                aimX,
+                aimY,
+                fireHeld,
+                isDashing,
+                1,
+                1)
+        {
+        }
+
+        public PlayerStateRecord(
+            uint playerId,
+            float positionX,
+            float positionY,
+            float aimX,
+            float aimY,
+            bool fireHeld,
+            bool isDashing,
+            ushort currentHealth,
+            ushort maxHealth)
         {
             PlayerId = playerId;
             PositionX = positionX;
@@ -39,6 +62,8 @@ namespace TopDownRoguelike.Networking.Protocol
             AimY = aimY;
             FireHeld = fireHeld;
             IsDashing = isDashing;
+            CurrentHealth = currentHealth;
+            MaxHealth = maxHealth;
         }
 
         public uint PlayerId { get; }
@@ -48,6 +73,8 @@ namespace TopDownRoguelike.Networking.Protocol
         public float AimY { get; }
         public bool FireHeld { get; }
         public bool IsDashing { get; }
+        public ushort CurrentHealth { get; }
+        public ushort MaxHealth { get; }
     }
 
     public sealed class PlayerStateSnapshotPayload
@@ -83,10 +110,12 @@ namespace TopDownRoguelike.Networking.Protocol
     public static class PlayerStateSnapshotCodec
     {
         public const int PrefixSize = 4;
-        public const int RecordSize = 24;
+        public const int RecordSize = 28;
         public const int MaxPlayerCount = 4;
 
         private const int FlagsOffset = 20;
+        private const int CurrentHealthOffset = 24;
+        private const int MaxHealthOffset = 26;
         private const uint FireHeldFlag = 1u;
         private const uint IsDashingFlag = 1u << 1;
         private const uint KnownFlags =
@@ -182,6 +211,16 @@ namespace TopDownRoguelike.Networking.Protocol
                     offset + FlagsOffset,
                     flags);
 
+                PacketCodec.WriteNetworkUInt16(
+                    payload,
+                    offset + CurrentHealthOffset,
+                    player.CurrentHealth);
+
+                PacketCodec.WriteNetworkUInt16(
+                    payload,
+                    offset + MaxHealthOffset,
+                    player.MaxHealth);
+
                 offset += RecordSize;
             }
 
@@ -271,6 +310,16 @@ namespace TopDownRoguelike.Networking.Protocol
                         payload,
                         offset + FlagsOffset);
 
+                ushort currentHealth =
+                    PacketCodec.ReadNetworkUInt16(
+                        payload,
+                        offset + CurrentHealthOffset);
+
+                ushort maxHealth =
+                    PacketCodec.ReadNetworkUInt16(
+                        payload,
+                        offset + MaxHealthOffset);
+
                 if ((flags & ~KnownFlags) != 0u)
                 {
                     throw new ArgumentException(
@@ -292,7 +341,9 @@ namespace TopDownRoguelike.Networking.Protocol
                         aimX,
                         aimY,
                         fireHeld,
-                        isDashing)
+                        isDashing,
+                        currentHealth,
+                        maxHealth)
                 );
 
                 offset += RecordSize;
@@ -336,6 +387,13 @@ namespace TopDownRoguelike.Networking.Protocol
                 {
                     throw new ArgumentException(
                         "Player state contains a non-finite value.");
+                }
+
+                if (player.MaxHealth == 0 ||
+                    player.CurrentHealth > player.MaxHealth)
+                {
+                    throw new ArgumentException(
+                        "Player state contains an invalid health range.");
                 }
 
                 for (int otherIndex = index + 1;

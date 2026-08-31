@@ -296,6 +296,16 @@ namespace
         );
     }
 
+    void PlayerStateSnapshotRecordIncludesHealthFields()
+    {
+        using namespace tdr::protocol;
+
+        Require(
+            kPlayerStateRecordSize == 28U,
+            "Player state record size must include health fields."
+        );
+    }
+
     void PlayerStateSnapshotUsesStableWireLayout()
     {
         using namespace tdr::protocol;
@@ -311,7 +321,9 @@ namespace
                 4.25F,
                 -1.0F,
                 0.0F,
-                0U
+                0U,
+                0x1234U,
+                0x5678U
             }
         );
 
@@ -323,7 +335,9 @@ namespace
                 -2.25F,
                 0.0F,
                 1.0F,
-                3U
+                3U,
+                0x0000U,
+                0x0001U
             }
         );
 
@@ -343,6 +357,10 @@ namespace
             0x3FU, 0x80U, 0x00U, 0x00U,
             // Flags: FireHeld | IsDashing
             0x00U, 0x00U, 0x00U, 0x03U,
+            // Current health: 0
+            0x00U, 0x00U,
+            // Max health: 1
+            0x00U, 0x01U,
 
             // Player ID: 0x01020304
             0x01U, 0x02U, 0x03U, 0x04U,
@@ -355,7 +373,11 @@ namespace
             // Aim Y: 0
             0x00U, 0x00U, 0x00U, 0x00U,
             // Flags: FireHeld is not set
-            0x00U, 0x00U, 0x00U, 0x00U
+            0x00U, 0x00U, 0x00U, 0x00U,
+            // Current health: 0x1234
+            0x12U, 0x34U,
+            // Max health: 0x5678
+            0x56U, 0x78U
         };
 
         const auto encoded =
@@ -411,6 +433,18 @@ namespace
         Require(
             decoded.players[1].flags == 0U,
             "Decoded second player FireHeld flag did not match."
+        );
+
+        Require(
+            decoded.players[0].currentHealth == 0x0000U &&
+            decoded.players[0].maxHealth == 0x0001U,
+            "Decoded first player health did not match."
+        );
+
+        Require(
+            decoded.players[1].currentHealth == 0x1234U &&
+            decoded.players[1].maxHealth == 0x5678U,
+            "Decoded second player health did not match."
         );
     }
 
@@ -563,6 +597,69 @@ namespace
             },
             "NaN aim was accepted during encoding."
         );
+
+        invalid.players.resize(1U);
+
+        invalid.players[0].aimY = 0.0F;
+
+        invalid.players[0].currentHealth = 101U;
+        invalid.players[0].maxHealth = 100U;
+
+        RequireInvalidArgument(
+            [&invalid]()
+            {
+                static_cast<void>(
+                    PlayerStateSnapshotCodec::Encode(
+                        invalid
+                    )
+                    );
+            },
+            "Current health above max health was accepted."
+        );
+
+        invalid.players[0].currentHealth = 0U;
+        invalid.players[0].maxHealth = 0U;
+
+        RequireInvalidArgument(
+            [&invalid]()
+            {
+                static_cast<void>(
+                    PlayerStateSnapshotCodec::Encode(
+                        invalid
+                    )
+                    );
+            },
+            "Zero max health was accepted."
+        );
+
+        PlayerStateSnapshotPayload dead{};
+        dead.players.push_back(
+            PlayerStateRecord{
+                1U,
+                0.0F,
+                0.0F,
+                1.0F,
+                0.0F,
+                0U,
+                0U,
+                100U
+            }
+        );
+
+        const auto encodedDead =
+            PlayerStateSnapshotCodec::Encode(dead);
+
+        const auto decodedDead =
+            PlayerStateSnapshotCodec::Decode(
+                encodedDead.data(),
+                encodedDead.size()
+            );
+
+        Require(
+            decodedDead.players[0].currentHealth == 0U &&
+            decodedDead.players[0].maxHealth == 100U,
+            "Zero current health was not preserved as a death state."
+        );
     }
 
     void PlayerStateSnapshotRejectsInvalidWireRecords()
@@ -586,6 +683,48 @@ namespace
         const auto encoded =
             PlayerStateSnapshotCodec::Encode(valid);
 
+        auto currentHealthAboveMax = encoded;
+
+        // 第一条记录的血量字段：
+        // CurrentHealth 位于 28～29
+        // MaxHealth 位于 30～31
+        currentHealthAboveMax[28] = 0x00U;
+        currentHealthAboveMax[29] = 0x65U;
+
+        currentHealthAboveMax[30] = 0x00U;
+        currentHealthAboveMax[31] = 0x64U;
+
+        RequireInvalidArgument(
+            [&currentHealthAboveMax]()
+            {
+                static_cast<void>(
+                    PlayerStateSnapshotCodec::Decode(
+                        currentHealthAboveMax.data(),
+                        currentHealthAboveMax.size()
+                    )
+                    );
+            },
+            "Wire current health above max health was accepted."
+        );
+
+        auto zeroMaxHealth = encoded;
+
+        zeroMaxHealth[30] = 0x00U;
+        zeroMaxHealth[31] = 0x00U;
+
+        RequireInvalidArgument(
+            [&zeroMaxHealth]()
+            {
+                static_cast<void>(
+                    PlayerStateSnapshotCodec::Decode(
+                        zeroMaxHealth.data(),
+                        zeroMaxHealth.size()
+                    )
+                    );
+            },
+            "Wire zero max health was accepted."
+        );
+
         auto zeroId = encoded;
         zeroId[4] = 0U;
         zeroId[5] = 0U;
@@ -606,10 +745,10 @@ namespace
         );
 
         auto duplicateId = encoded;
-        duplicateId[28] = 0U;
-        duplicateId[29] = 0U;
-        duplicateId[30] = 0U;
-        duplicateId[31] = 1U;
+        duplicateId[32] = 0U;
+        duplicateId[33] = 0U;
+        duplicateId[34] = 0U;
+        duplicateId[35] = 1U;
 
         RequireInvalidArgument(
             [&duplicateId]()
@@ -625,8 +764,15 @@ namespace
         );
 
         auto descendingIds = encoded;
+        descendingIds[4] = 0U;
+        descendingIds[5] = 0U;
+        descendingIds[6] = 0U;
         descendingIds[7] = 2U;
-        descendingIds[31] = 1U;
+
+        descendingIds[32] = 0U;
+        descendingIds[33] = 0U;
+        descendingIds[34] = 0U;
+        descendingIds[35] = 1U;
 
         RequireInvalidArgument(
             [&descendingIds]()
@@ -691,6 +837,8 @@ int main()
 
         PlayerInputRejectsInvalidValues();
         PlayerInputRejectsMalformedPayloads();
+
+        PlayerStateSnapshotRecordIncludesHealthFields();
 
         PlayerStateSnapshotUsesStableWireLayout();
         PlayerStateSnapshotRejectsMalformedPayloads();

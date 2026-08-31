@@ -26,6 +26,9 @@ namespace TopDownRoguelike.Gameplay.Bosses
         [Header("Runtime Debug")]
         [SerializeField] private BossState currentState;
         [SerializeField] private bool isPhaseTwo;
+        public byte CurrentPhase =>
+            isPhaseTwo ? (byte)2 : (byte)1;
+
         [SerializeField] private float nextAttackTime;
 
         private Rigidbody2D rb;

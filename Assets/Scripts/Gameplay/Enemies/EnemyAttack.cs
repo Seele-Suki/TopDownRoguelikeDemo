@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using TopDownRoguelike.Gameplay.Combat;
+using TopDownRoguelike.Infrastructure;
 using UnityEngine;
 
 namespace TopDownRoguelike.Gameplay.Enemies
@@ -31,6 +32,11 @@ namespace TopDownRoguelike.Gameplay.Enemies
 
         private void Update()
         {
+            if (GameSession.IsClient)
+            {
+                return;
+            }
+
             int attackDamage = enemyData != null ? enemyData.AttackDamage : 1;
             float attackRange = enemyData != null ? enemyData.AttackRange : 1.3f;
             float baseAttackCooldown = enemyData != null ? enemyData.AttackCooldown : 1f;

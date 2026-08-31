@@ -335,9 +335,11 @@ namespace TopDownRoguelike.Networking.Protocol
                 case MessageType.ErrorMessage:
                 case MessageType.UdpBindRequest:
                 case MessageType.UdpBindAccepted:
-                case MessageType.UdpPing:
-                case MessageType.UdpPong:
-                    return true;
+                            case MessageType.UdpPing:
+                            case MessageType.UdpPong:
+                            case MessageType.WorldEntitySpawned:
+                            case MessageType.WorldEntityRemoved:
+                                return true;
 
                 case MessageType.Invalid:
                 default:

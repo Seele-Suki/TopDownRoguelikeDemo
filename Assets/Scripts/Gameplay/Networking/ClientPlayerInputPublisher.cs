@@ -99,15 +99,24 @@ namespace TopDownRoguelike.Gameplay.Networking
             uint shotgunRequestSequence =
                 inputSource.ShotgunRequestSequence;
 
-            sendInput(
-                new PlayerInputPayload(
-                    movement.x,
-                    movement.y,
-                    aim.x,
-                    aim.y,
-                    fireHeld,
-                    dashRequestSequence,
-                    shotgunRequestSequence));
+            try
+            {
+                sendInput(
+                    new PlayerInputPayload(
+                        movement.x,
+                        movement.y,
+                        aim.x,
+                        aim.y,
+                        fireHeld,
+                        dashRequestSequence,
+                        shotgunRequestSequence));
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    $"ClientPlayerInputPublisher: send failed: {exception.Message}",
+                    this);
+            }
         }
 
         private void OnDisable()

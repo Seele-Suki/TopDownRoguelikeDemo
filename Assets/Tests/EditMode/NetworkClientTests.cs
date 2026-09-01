@@ -5,16 +5,56 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using TopDownRoguelike.Infrastructure;
 using TopDownRoguelike.Networking.Client;
 using TopDownRoguelike.Networking.Protocol;
 using TopDownRoguelike.Networking.Transport;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace TopDownRoguelike.Tests.EditMode
 {
     public sealed class NetworkClientTests
     {
+        [Test]
+        public void TransitionTo_LogsPreviousAndNextState()
+        {
+            var client = new NetworkClient();
+
+            try
+            {
+                MethodInfo transitionMethod =
+                    typeof(NetworkClient).GetMethod(
+                        "TransitionTo",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(transitionMethod, Is.Not.Null);
+
+                LogAssert.Expect(
+                    LogType.Log,
+                    "NetworkClient state transition: " +
+                    "Disconnected -> Connected, " +
+                    "room='', playerId=0");
+
+                transitionMethod.Invoke(
+                    client,
+                    new object[] { NetworkClientState.Connected });
+
+                LogAssert.Expect(
+                    LogType.Log,
+                    "NetworkClient state transition: " +
+                    "Connected -> Disconnected, " +
+                    "room='', playerId=0");
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
         [Test]
         public void JoinRoom_DoesNotExposeLegacyRoomIdState()
         {
@@ -816,6 +856,13 @@ namespace TopDownRoguelike.Tests.EditMode
                     0,
                     serverHello.Length);
 
+                LogAssert.Expect(
+                    LogType.Error,
+                    new Regex(
+                        "NetworkClient failure: " +
+                        "UDP binding credentials must contain " +
+                        "20 bytes\\.\\s*Parameter name: payload"));
+
                 WaitForState(
                     client,
                     NetworkClientState.Error);
@@ -1079,6 +1126,45 @@ namespace TopDownRoguelike.Tests.EditMode
                     typeof(Action<
                         uint,
                         PlayerShotgunEvent>)));
+        }
+
+        [Test]
+        public void Fail_LogsOriginalNetworkError()
+        {
+            var client = new NetworkClient();
+
+            try
+            {
+                MethodInfo failMethod =
+                    typeof(NetworkClient).GetMethod(
+                        "Fail",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+                Assert.That(failMethod, Is.Not.Null);
+
+                LogAssert.Expect(
+                    LogType.Error,
+                    "NetworkClient failure: UDP worker failed.");
+
+                LogAssert.Expect(
+                    LogType.Log,
+                    "NetworkClient state transition: " +
+                    "Disconnected -> Error, room='', playerId=0");
+
+                failMethod.Invoke(
+                    client,
+                    new object[] { "UDP worker failed." });
+
+                LogAssert.Expect(
+                    LogType.Log,
+                    "NetworkClient state transition: " +
+                    "Error -> Disconnected, room='', playerId=0");
+            }
+            finally
+            {
+                client.Dispose();
+            }
         }
 
         [Test]

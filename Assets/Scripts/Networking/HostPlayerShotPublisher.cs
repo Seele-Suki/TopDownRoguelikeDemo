@@ -53,8 +53,16 @@ namespace TopDownRoguelike.Gameplay.Networking
                 $"sequence={shotEvent.ShotSequence}",
                 this);
 
-            sendShotEvent(
-                shotEvent);
+            try
+            {
+                sendShotEvent(shotEvent);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    $"HostPlayerShotPublisher: send failed: {exception.Message}",
+                    this);
+            }
         }
 
         private void OnDisable()

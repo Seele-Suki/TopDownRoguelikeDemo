@@ -35,6 +35,11 @@ namespace TopDownRoguelike.Tests.EditMode
             Type controllerType =
                 FindType(PlayerControllerTypeName);
 
+            Type playerHealthType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Characters." +
+                    "PlayerHealth");
+
             Type remoteInputSourceType =
                 FindType(RemoteInputSourceTypeName);
 
@@ -47,6 +52,11 @@ namespace TopDownRoguelike.Tests.EditMode
                 controllerType,
                 Is.Not.Null,
                 "PlayerController must exist.");
+
+            Assert.That(
+                playerHealthType,
+                Is.Not.Null,
+                "PlayerHealth must exist.");
 
             var publisherObject =
                 new GameObject("Host State Publisher Test");
@@ -74,6 +84,22 @@ namespace TopDownRoguelike.Tests.EditMode
 
                 Component secondController =
                     secondPlayer.AddComponent(controllerType);
+
+                Component firstHealth =
+                    firstPlayer.AddComponent(playerHealthType);
+
+                Component secondHealth =
+                    secondPlayer.AddComponent(playerHealthType);
+
+                SetPrivateField(
+                    firstHealth,
+                    "currentHealth",
+                    6);
+
+                SetPrivateField(
+                    secondHealth,
+                    "currentHealth",
+                    3);
 
                 Component secondInputSource =
                     secondPlayer.AddComponent(
@@ -181,6 +207,14 @@ namespace TopDownRoguelike.Tests.EditMode
                     1f,
                     0f);
 
+                Assert.That(
+                    snapshot.Players[0].CurrentHealth,
+                    Is.EqualTo((ushort)6));
+
+                Assert.That(
+                    snapshot.Players[0].MaxHealth,
+                    Is.EqualTo((ushort)10));
+
                 AssertPlayerState(
                     snapshot.Players[1],
                     22u,
@@ -188,6 +222,14 @@ namespace TopDownRoguelike.Tests.EditMode
                     4.25f,
                     0f,
                     1f);
+
+                Assert.That(
+                    snapshot.Players[1].CurrentHealth,
+                    Is.EqualTo((ushort)3));
+
+                Assert.That(
+                    snapshot.Players[1].MaxHealth,
+                    Is.EqualTo((ushort)10));
 
                 Assert.That(
                     snapshot.Players[1].FireHeld,

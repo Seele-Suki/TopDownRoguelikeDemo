@@ -18,6 +18,9 @@ namespace TopDownRoguelike.Tests.EditMode
                 new GameObject(
                     "Remote Shotgun Visual Prefab");
 
+            RemoteProjectileVisual[] spawnedVisuals =
+                new RemoteProjectileVisual[0];
+
             try
             {
                 RemotePlayerShotgunEventReceiver receiver =
@@ -27,6 +30,8 @@ namespace TopDownRoguelike.Tests.EditMode
                 RemoteProjectileVisual visual =
                     prefab.AddComponent<
                         RemoteProjectileVisual>();
+
+                prefab.SetActive(false);
 
                 receiver.Configure(
                     9u);
@@ -60,10 +65,25 @@ namespace TopDownRoguelike.Tests.EditMode
 
                 Assert.That(
                     owner.transform.childCount,
-                    Is.EqualTo(5));
+                    Is.EqualTo(0),
+                    "Remote shotgun visuals must not inherit " +
+                    "the remote player's transform.");
+
+                spawnedVisuals =
+                    UnityEngine.Object.FindObjectsOfType<
+                        RemoteProjectileVisual>();
             }
             finally
             {
+                foreach (RemoteProjectileVisual spawnedVisual in spawnedVisuals)
+                {
+                    if (spawnedVisual != null)
+                    {
+                        UnityEngine.Object.DestroyImmediate(
+                            spawnedVisual);
+                    }
+                }
+
                 Object.DestroyImmediate(
                     owner);
 
@@ -120,6 +140,9 @@ namespace TopDownRoguelike.Tests.EditMode
             GameObject clientVisualPrefab =
                 new GameObject(
                     "Client Projectile Visual Prefab");
+
+            RemoteProjectileVisual[] spawnedClientVisuals =
+                new RemoteProjectileVisual[0];
 
             hostPlayer.SetActive(false);
             hostPoolObject.SetActive(false);
@@ -269,6 +292,8 @@ namespace TopDownRoguelike.Tests.EditMode
                 clientVisualPrefab.AddComponent<
                     RemoteProjectileVisual>();
 
+                clientVisualPrefab.SetActive(false);
+
                 RemoteShotgunVisualSpawner spawner =
                     clientPlayer.AddComponent<
                         RemoteShotgunVisualSpawner>();
@@ -285,6 +310,14 @@ namespace TopDownRoguelike.Tests.EditMode
 
                 Assert.That(
                     clientPlayer.transform.childCount,
+                    Is.EqualTo(0));
+
+                spawnedClientVisuals =
+                    UnityEngine.Object.FindObjectsOfType<
+                        RemoteProjectileVisual>();
+
+                Assert.That(
+                    spawnedClientVisuals.Length,
                     Is.EqualTo(5));
 
                 float[] expectedAngles =
@@ -316,14 +349,11 @@ namespace TopDownRoguelike.Tests.EditMode
                             "moveDirection");
 
                     RemoteProjectileVisual clientVisual =
-                        clientPlayer.transform
-                            .GetChild(index)
-                            .GetComponent<
-                                RemoteProjectileVisual>();
+                        FindClosestVisual(
+                            spawnedClientVisuals,
+                            hostDirection);
 
-                    Assert.That(
-                        clientVisual,
-                        Is.Not.Null);
+                    Assert.That(clientVisual, Is.Not.Null);
 
                     Assert.That(
                         Vector2.Distance(
@@ -346,6 +376,15 @@ namespace TopDownRoguelike.Tests.EditMode
             }
             finally
             {
+                foreach (RemoteProjectileVisual visual in spawnedClientVisuals)
+                {
+                    if (visual != null)
+                    {
+                        UnityEngine.Object.DestroyImmediate(
+                            visual.gameObject);
+                    }
+                }
+
                 Object.DestroyImmediate(
                     hostPlayer);
 
@@ -361,6 +400,33 @@ namespace TopDownRoguelike.Tests.EditMode
                 Object.DestroyImmediate(
                     clientVisualPrefab);
             }
+        }
+
+        private static RemoteProjectileVisual FindClosestVisual(
+            RemoteProjectileVisual[] visuals,
+            Vector2 direction)
+        {
+            RemoteProjectileVisual closest = null;
+            float closestDistance = float.MaxValue;
+
+            foreach (RemoteProjectileVisual visual in visuals)
+            {
+                if (visual == null)
+                {
+                    continue;
+                }
+
+                float distance =
+                    Vector2.Distance(direction, visual.Direction);
+
+                if (distance < closestDistance)
+                {
+                    closest = visual;
+                    closestDistance = distance;
+                }
+            }
+
+            return closest;
         }
 
         private static System.Type FindType(

@@ -93,6 +93,40 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void WorldStateSnapshotWireValue_IsDefinedAndAcceptedAsUdp()
+        {
+            const ushort wireValue = 40;
+
+            MessageType messageType =
+                (MessageType)wireValue;
+
+            Assert.That(
+                Enum.GetName(
+                    typeof(MessageType),
+                    messageType),
+                Is.EqualTo("WorldStateSnapshot"));
+
+            var header =
+                new UdpMessageHeader(
+                    messageType,
+                    CreateToken(),
+                    1u,
+                    11u);
+
+            byte[] encoded =
+                UdpPacketCodec.Encode(
+                    header,
+                    Array.Empty<byte>());
+
+            DecodedUdpPacket decoded =
+                UdpPacketCodec.Decode(encoded);
+
+            Assert.That(
+                decoded.Header.Type,
+                Is.EqualTo(messageType));
+        }
+
+        [Test]
         public void EncodeUdpPing_MatchesCppLayout()
         {
             byte[] token = CreateToken();

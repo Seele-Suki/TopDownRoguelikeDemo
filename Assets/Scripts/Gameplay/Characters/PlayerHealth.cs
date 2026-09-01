@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using TopDownRoguelike.Gameplay.Combat;
+using TopDownRoguelike.Infrastructure;
 using UnityEngine;
 using System;
 
@@ -29,6 +30,11 @@ namespace TopDownRoguelike.Gameplay.Characters
 
         public void TakeDamage(DamageInfo damageInfo)
         {
+            if (GameSession.IsClient)
+            {
+                return;
+            }
+
             if (isDead)
             {
                 return;
@@ -77,6 +83,11 @@ namespace TopDownRoguelike.Gameplay.Characters
 
         public void AddMaxHealth(int amount)
         {
+            if (GameSession.IsClient)
+            {
+                return;
+            }
+
             maxHealth += amount;
             currentHealth += amount;
 
@@ -88,6 +99,52 @@ namespace TopDownRoguelike.Gameplay.Characters
             currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
 
             NotifyHealthChanged();
+        }
+
+        public bool ApplyAuthoritativeState(
+            int authoritativeCurrentHealth,
+            int authoritativeMaxHealth)
+        {
+            if (!GameSession.IsClient)
+            {
+                return false;
+            }
+
+            if (authoritativeMaxHealth < 1 ||
+                authoritativeMaxHealth > ushort.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(authoritativeMaxHealth));
+            }
+
+            if (authoritativeCurrentHealth < 0 ||
+                authoritativeCurrentHealth >
+                    authoritativeMaxHealth)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(authoritativeCurrentHealth));
+            }
+
+            bool wasDead = isDead;
+            bool healthChanged =
+                currentHealth != authoritativeCurrentHealth ||
+                maxHealth != authoritativeMaxHealth;
+
+            maxHealth = authoritativeMaxHealth;
+            currentHealth = authoritativeCurrentHealth;
+            isDead = authoritativeCurrentHealth == 0;
+
+            if (healthChanged)
+            {
+                NotifyHealthChanged();
+            }
+
+            if (!wasDead && isDead)
+            {
+                OnDied?.Invoke();
+            }
+
+            return true;
         }
 
         private void NotifyHealthChanged()

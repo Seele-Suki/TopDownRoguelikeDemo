@@ -109,6 +109,29 @@ namespace TopDownRoguelike.Gameplay.Networking
                         out DashSkill dashSkill) &&
                     dashSkill.IsDashing;
 
+                ushort currentHealth = 1;
+                ushort maxHealth = 1;
+
+                if (player.TryGetComponent(
+                        out PlayerHealth playerHealth))
+                {
+                    if (playerHealth.MaxHealth < 1 ||
+                        playerHealth.MaxHealth > ushort.MaxValue ||
+                        playerHealth.CurrentHealth < 0 ||
+                        playerHealth.CurrentHealth >
+                            playerHealth.MaxHealth)
+                    {
+                        elapsedSeconds = 0f;
+                        return;
+                    }
+
+                    currentHealth =
+                        (ushort)playerHealth.CurrentHealth;
+
+                    maxHealth =
+                        (ushort)playerHealth.MaxHealth;
+                }
+
                 playerStates.Add(
                     new PlayerStateRecord(
                         playerId,
@@ -117,7 +140,9 @@ namespace TopDownRoguelike.Gameplay.Networking
                         aim.x,
                         aim.y,
                         fireHeld,
-                        isDashing));
+                        isDashing,
+                        currentHealth,
+                        maxHealth));
             }
 
             elapsedSeconds %=

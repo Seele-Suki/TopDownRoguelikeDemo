@@ -1750,6 +1750,39 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void DisableRemotePlayerHealthBars_DisablesNestedViews()
+        {
+            Type bootstrapType = FindType(BootstrapTypeName);
+            Type healthBarViewType = FindType(
+                "TopDownRoguelike.Gameplay.UI.HealthBarView");
+            var bootstrapObject = new GameObject("Bootstrap Test");
+            var remotePlayer = new GameObject("Remote Player");
+            var nestedViewObject = new GameObject("Remote Health Bar");
+            nestedViewObject.transform.SetParent(remotePlayer.transform);
+
+            try
+            {
+                Component nestedView = nestedViewObject.AddComponent(healthBarViewType);
+                Component bootstrap = bootstrapObject.AddComponent(bootstrapType);
+                MethodInfo method = bootstrapType.GetMethod(
+                    "DisableRemotePlayerHealthBars",
+                    BindingFlags.Instance |
+                    BindingFlags.Static |
+                    BindingFlags.NonPublic);
+
+                Assert.That(method, Is.Not.Null);
+                method.Invoke(bootstrap, new object[] { remotePlayer });
+
+                Assert.That(((Behaviour)nestedView).enabled, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(bootstrapObject);
+                UnityEngine.Object.DestroyImmediate(remotePlayer);
+            }
+        }
+
+        [Test]
         public void NetworkGameBootstrap_ExposesHostShotgunPublisherConfiguration()
         {
             Type bootstrapType =

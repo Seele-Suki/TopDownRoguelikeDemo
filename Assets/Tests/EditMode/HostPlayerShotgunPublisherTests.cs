@@ -145,6 +145,27 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void SendFailure_DoesNotBubbleBackToShotgunSource()
+        {
+            GameObject root = new GameObject("Host Shotgun Publisher Failure Test");
+            GameObject player = new GameObject("Host Shotgun Failure Test");
+            try
+            {
+                var source = player.AddComponent<PlayerShotgunEventSource>();
+                var publisher = root.AddComponent<HostPlayerShotgunPublisher>();
+                source.Configure(7u);
+                publisher.Configure(source, _ => throw new InvalidOperationException("send failed"));
+
+                Assert.DoesNotThrow(() => source.NotifyShotgun(Vector2.right, 1u, 20f, 0.5f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+                UnityEngine.Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
         public void Configure_RejectsNullDependencies()
         {
             GameObject root =

@@ -51,10 +51,15 @@ namespace TopDownRoguelike.Gameplay.Weapons
                 inputSource.IsFireHeld &&
                 Time.time >= nextFireTime)
             {
-                Fire();
-
-                nextFireTime =
-                    Time.time + fireCooldown;
+                try
+                {
+                    Fire();
+                }
+                finally
+                {
+                    nextFireTime =
+                        Time.time + fireCooldown;
+                }
             }
         }
 

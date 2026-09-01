@@ -58,8 +58,7 @@ namespace TopDownRoguelike.Gameplay.Networking
 
                 GameObject visualObject =
                     Instantiate(
-                        visualPrefab,
-                        transform);
+                        visualPrefab);
 
                 RemoteProjectileVisual visual =
                     visualObject.GetComponent<

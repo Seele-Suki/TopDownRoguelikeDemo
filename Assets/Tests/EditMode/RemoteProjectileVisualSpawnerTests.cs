@@ -22,6 +22,9 @@ namespace TopDownRoguelike.Tests.EditMode
                 new GameObject(
                     "Remote Projectile Prefab");
 
+            GameObject spawnedObject =
+                null;
+
             try
             {
                 RemotePlayerShotEventReceiver receiver =
@@ -63,24 +66,40 @@ namespace TopDownRoguelike.Tests.EditMode
                     spawner.ActiveVisualCount,
                     Is.EqualTo(1));
 
-                RemoteProjectileVisual[] visuals =
-                    spawnerObject.GetComponentsInChildren<
+                Assert.That(
+                    spawnerObject.transform.childCount,
+                    Is.EqualTo(0),
+                    "Remote projectile visuals must not inherit " +
+                    "the remote player's transform.");
+
+                spawnedObject =
+                    GameObject.Find(
+                        "Remote Projectile Prefab(Clone)");
+
+                Assert.That(spawnedObject, Is.Not.Null);
+
+                RemoteProjectileVisual visual =
+                    spawnedObject.GetComponent<
                         RemoteProjectileVisual>();
 
-                Assert.That(
-                    visuals.Length,
-                    Is.EqualTo(1));
+                Assert.That(visual, Is.Not.Null);
 
                 Assert.That(
-                    visuals[0].transform.position.x,
+                    visual.transform.position.x,
                     Is.EqualTo(3.0f));
 
                 Assert.That(
-                    visuals[0].transform.position.y,
+                    visual.transform.position.y,
                     Is.EqualTo(-2.0f));
             }
             finally
             {
+                if (spawnedObject != null)
+                {
+                    Object.DestroyImmediate(
+                        spawnedObject);
+                }
+
                 Object.DestroyImmediate(
                     receiverObject);
 
@@ -147,6 +166,9 @@ namespace TopDownRoguelike.Tests.EditMode
                 new GameObject(
                     "Remote Projectile Prefab");
 
+            GameObject spawnedObject =
+                null;
+
             try
             {
                 RemotePlayerShotEventReceiver receiver =
@@ -179,6 +201,10 @@ namespace TopDownRoguelike.Tests.EditMode
 
                 spawner.Tick();
 
+                spawnedObject =
+                    GameObject.Find(
+                        "Remote Projectile Prefab(Clone)");
+
                 MonoBehaviour[] components =
                     spawnerObject.GetComponentsInChildren<
                         MonoBehaviour>();
@@ -196,6 +222,12 @@ namespace TopDownRoguelike.Tests.EditMode
             }
             finally
             {
+                if (spawnedObject != null)
+                {
+                    Object.DestroyImmediate(
+                        spawnedObject);
+                }
+
                 Object.DestroyImmediate(
                     receiverObject);
 

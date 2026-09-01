@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using TopDownRoguelike.Gameplay.Networking;
 using TopDownRoguelike.Networking.Protocol;
@@ -71,10 +72,10 @@ namespace TopDownRoguelike.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(
+                UnityEngine.Object.DestroyImmediate(
                     root);
 
-                Object.DestroyImmediate(
+                UnityEngine.Object.DestroyImmediate(
                     player);
             }
         }
@@ -125,11 +126,32 @@ namespace TopDownRoguelike.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(
+                UnityEngine.Object.DestroyImmediate(
                     root);
 
-                Object.DestroyImmediate(
+                UnityEngine.Object.DestroyImmediate(
                     player);
+            }
+        }
+
+        [Test]
+        public void SendFailure_DoesNotBubbleBackToShotSource()
+        {
+            GameObject root = new GameObject("Host Shot Publisher Failure Test");
+            GameObject player = new GameObject("Host Player Failure Test");
+            try
+            {
+                var source = player.AddComponent<PlayerShooterShotEventSource>();
+                var publisher = root.AddComponent<HostPlayerShotPublisher>();
+                source.Configure(7u);
+                publisher.Configure(source, _ => throw new InvalidOperationException("send failed"));
+
+                Assert.DoesNotThrow(() => source.NotifyShot(Vector2.right));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+                UnityEngine.Object.DestroyImmediate(player);
             }
         }
     }

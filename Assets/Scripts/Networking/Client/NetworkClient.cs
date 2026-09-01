@@ -1547,6 +1547,9 @@ namespace TopDownRoguelike.Networking.Client
                     ? "Unknown network error."
                     : errorMessage;
 
+            Debug.LogError(
+                $"NetworkClient failure: {finalError}");
+
             try
             {
                 StopTransports();
@@ -1644,6 +1647,12 @@ namespace TopDownRoguelike.Networking.Client
 
             NetworkClientState previousState =
                 State;
+
+            Debug.Log(
+                $"NetworkClient state transition: " +
+                $"{previousState} -> {nextState}, " +
+                $"room='{CurrentRoomId}', " +
+                $"playerId={PlayerId}");
 
             State =
                 nextState;

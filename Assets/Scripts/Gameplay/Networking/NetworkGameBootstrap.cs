@@ -365,6 +365,9 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             DisableLocalControl(
                 createdRemotePlayer);
+
+            DisableRemotePlayerHealthBars(
+                createdRemotePlayer);
             
             if (!TryEnableRemoteSimulation(
                 createdRemotePlayer))
@@ -462,6 +465,9 @@ namespace TopDownRoguelike.Gameplay.Networking
                 scenePlayer);
 
             DisableLocalControl(
+                createdRemotePlayer);
+
+            DisableRemotePlayerHealthBars(
                 createdRemotePlayer);
 
             if (!EnsurePlayerNetworkEntityId(
@@ -904,6 +910,8 @@ namespace TopDownRoguelike.Gameplay.Networking
                 return;
             }
 
+            ApplyAuthoritativePlayerHealth(snapshot);
+
             if (remotePlayer != null &&
                 remotePlayer.TryGetComponent(
                 out RemotePlayerInterpolator interpolator))
@@ -923,6 +931,40 @@ namespace TopDownRoguelike.Gameplay.Networking
             PlayerStateSnapshotReceived?.Invoke(
                 senderPlayerId,
                 snapshot);
+        }
+
+        private void ApplyAuthoritativePlayerHealth(
+            PlayerStateSnapshotPayload snapshot)
+        {
+            if (!GameSession.IsClient ||
+                registry == null ||
+                snapshot == null)
+            {
+                return;
+            }
+
+            for (int index = 0;
+                index < snapshot.Players.Count;
+                index++)
+            {
+                PlayerStateRecord state =
+                    snapshot.Players[index];
+
+                if (state == null ||
+                    !registry.TryGetPlayer(
+                        state.PlayerId,
+                        out GameObject player) ||
+                    player == null ||
+                    !player.TryGetComponent(
+                        out PlayerHealth playerHealth))
+                {
+                    continue;
+                }
+
+                playerHealth.ApplyAuthoritativeState(
+                    state.CurrentHealth,
+                    state.MaxHealth);
+            }
         }
 
         private void HandleRemotePlayerShotEvent(
@@ -1668,6 +1710,24 @@ namespace TopDownRoguelike.Gameplay.Networking
                     out Rigidbody2D body))
             {
                 body.velocity = Vector2.zero;
+            }
+        }
+
+        private static void DisableRemotePlayerHealthBars(
+            GameObject remotePlayer)
+        {
+            if (remotePlayer == null)
+            {
+                return;
+            }
+
+            HealthBarView[] healthBars =
+                remotePlayer.GetComponentsInChildren<HealthBarView>(
+                    true);
+
+            foreach (HealthBarView healthBar in healthBars)
+            {
+                healthBar.enabled = false;
             }
         }
 

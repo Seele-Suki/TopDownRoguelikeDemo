@@ -202,6 +202,35 @@ namespace TopDownRoguelike.Tests.EditMode
             }
         }
 
+        [Test]
+        public void Advance_SendFailure_DoesNotBubbleToGameplay()
+        {
+            Type publisherType = FindType(PublisherTypeName);
+            Type remoteInputType = FindType(RemoteInputTypeName);
+            var publisherObject = new GameObject("Input Failure Publisher Test");
+            var inputObject = new GameObject("Input Failure Source Test");
+            publisherObject.SetActive(false);
+            inputObject.SetActive(false);
+            try
+            {
+                Component publisher = publisherObject.AddComponent(publisherType);
+                Component inputSource = inputObject.AddComponent(remoteInputType);
+                MethodInfo configure = publisherType.GetMethod("Configure");
+                configure.Invoke(publisher, new object[]
+                {
+                    inputSource,
+                    new Action<PlayerInputPayload>(_ => throw new InvalidOperationException("send failed"))
+                });
+
+                Assert.DoesNotThrow(() => InvokeAdvance(publisher, 0.051f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(publisherObject);
+                UnityEngine.Object.DestroyImmediate(inputObject);
+            }
+        }
+
         private static void InvokeAdvance(
             Component publisher,
             float deltaTime)

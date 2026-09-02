@@ -15,6 +15,7 @@ MonoBehaviour:
   upgradeName: "\u5FEB\u901F\u88C5\u586B"
   description: "\u9730\u5F39\u6280\u80FD\u51B7\u5374\u65F6\u95F4\u51CF\u5C11 0.4
     \u79D2\u3002"
+  upgradeId: 8
   upgradeType: 7
   floatValue: 0.4
   intValue: 0

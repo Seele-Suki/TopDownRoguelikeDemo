@@ -131,6 +131,9 @@ namespace tdr::net
     }
 
     std::vector<std::vector<std::uint8_t>> TcpClientSession::TakeSharedExperiencePayloads(){ std::vector<std::vector<std::uint8_t>> p; p.swap(sharedExperiencePayloads_); return p; }
+    std::vector<std::vector<std::uint8_t>> TcpClientSession::TakeUpgradeStartedPayloads(){ std::vector<std::vector<std::uint8_t>> p; p.swap(upgradeStartedPayloads_); return p; }
+    std::vector<std::vector<std::uint8_t>> TcpClientSession::TakeUpgradeChoicePayloads(){ std::vector<std::vector<std::uint8_t>> p; p.swap(upgradeChoicePayloads_); return p; }
+    std::vector<std::vector<std::uint8_t>> TcpClientSession::TakeUpgradeCompletedPayloads(){ std::vector<std::vector<std::uint8_t>> p; p.swap(upgradeCompletedPayloads_); return p; }
 
     void TcpClientSession::LeaveRoom()
     {
@@ -646,6 +649,9 @@ namespace tdr::net
         }
 
         if (packet.type == tdr::protocol::MessageType::SharedExperienceSnapshot) { sharedExperiencePayloads_.push_back(packet.payload); return; }
+        if (packet.type == tdr::protocol::MessageType::UpgradeStarted) { upgradeStartedPayloads_.push_back(packet.payload); return; }
+        if (packet.type == tdr::protocol::MessageType::UpgradeChoiceSubmitted) { upgradeChoicePayloads_.push_back(packet.payload); return; }
+        if (packet.type == tdr::protocol::MessageType::UpgradeCompleted) { upgradeCompletedPayloads_.push_back(packet.payload); return; }
 
         throw std::invalid_argument(
             "TCP client session received "

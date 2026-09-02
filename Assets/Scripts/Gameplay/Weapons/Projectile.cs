@@ -1,4 +1,5 @@
 using TopDownRoguelike.Gameplay.Combat;
+using TopDownRoguelike.Gameplay.Enemies;
 using UnityEngine;
 
 namespace TopDownRoguelike.Gameplay.Weapons
@@ -54,12 +55,15 @@ namespace TopDownRoguelike.Gameplay.Weapons
                 return;
             }
 
-            if (other.TryGetComponent(out IDamageable damageable))
+            EnemyHealth enemyHealth =
+                other.GetComponentInParent<EnemyHealth>();
+
+            if (enemyHealth != null)
             {
                 DamageInfo damageInfo =
                     new DamageInfo(damage, moveDirection, owner);
 
-                damageable.TakeDamage(damageInfo);
+                enemyHealth.TakeDamage(damageInfo);
 
                 if (remainingPenetrations > 0)
                 {

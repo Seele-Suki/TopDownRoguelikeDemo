@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using TopDownRoguelike.Infrastructure;
 using TopDownRoguelike.Networking.Protocol;
@@ -113,6 +114,15 @@ namespace TopDownRoguelike.Networking.Client
 
         public event Action<SharedExperienceSnapshotPayload>
             SharedExperienceSnapshotReceived;
+
+        public event Action<UpgradeStartedPayload>
+            UpgradeStartedReceived;
+
+        public event Action<uint, UpgradeChoicePayload>
+            UpgradeChoiceSubmittedReceived;
+
+        public event Action<UpgradeCompletedPayload>
+            UpgradeCompletedReceived;
 
         public event Action<
             uint,
@@ -672,6 +682,42 @@ namespace TopDownRoguelike.Networking.Client
             }
         }
 
+        public void SendUpgradeStarted(
+            UpgradeStartedPayload payload)
+        {
+            ThrowIfDisposed();
+            EnsureInRoom();
+            if (!GameSession.IsHost)
+                throw new InvalidOperationException(
+                    "Only the room host can send upgrade start.");
+            tcpTransport.Send(
+                MessageType.UpgradeStarted,
+                UpgradeNetworkCodec.EncodeStarted(payload));
+        }
+
+        public void SendUpgradeChoiceSubmitted(
+            UpgradeChoicePayload payload)
+        {
+            ThrowIfDisposed();
+            EnsureInRoom();
+            tcpTransport.Send(
+                MessageType.UpgradeChoiceSubmitted,
+                UpgradeNetworkCodec.EncodeChoice(payload));
+        }
+
+        public void SendUpgradeCompleted(
+            UpgradeCompletedPayload payload)
+        {
+            ThrowIfDisposed();
+            EnsureInRoom();
+            if (!GameSession.IsHost)
+                throw new InvalidOperationException(
+                    "Only the room host can send upgrade completion.");
+            tcpTransport.Send(
+                MessageType.UpgradeCompleted,
+                UpgradeNetworkCodec.EncodeCompleted(payload));
+        }
+
         public void SendPlayerShotEvent(
             PlayerShotEvent shotEvent)
         {
@@ -1024,6 +1070,32 @@ namespace TopDownRoguelike.Networking.Client
             {
                 HandleSharedExperienceSnapshot(
                     transportEvent.Payload);
+                return;
+            }
+
+            if (transportEvent.TransportKind == NetworkTransportKind.Tcp &&
+                transportEvent.PacketType == MessageType.UpgradeStarted &&
+                State == NetworkClientState.InRoom)
+            {
+                HandleUpgradeStarted(transportEvent.Payload);
+                return;
+            }
+
+            if (transportEvent.TransportKind == NetworkTransportKind.Tcp &&
+                transportEvent.PacketType == MessageType.UpgradeChoiceSubmitted &&
+                State == NetworkClientState.InRoom)
+            {
+                HandleUpgradeChoiceSubmitted(
+                    transportEvent.PlayerId,
+                    transportEvent.Payload);
+                return;
+            }
+
+            if (transportEvent.TransportKind == NetworkTransportKind.Tcp &&
+                transportEvent.PacketType == MessageType.UpgradeCompleted &&
+                State == NetworkClientState.InRoom)
+            {
+                HandleUpgradeCompleted(transportEvent.Payload);
                 return;
             }
 
@@ -1386,6 +1458,76 @@ namespace TopDownRoguelike.Networking.Client
             }
         }
 
+        private void HandleUpgradeStarted(byte[] payload)
+        {
+            try
+            {
+                UpgradeStartedReceived?.Invoke(
+                    UpgradeNetworkCodec.DecodeStarted(payload));
+            }
+            catch (Exception exception) { Fail(exception.Message); }
+        }
+
+        private void HandleUpgradeChoiceSubmitted(
+            uint senderPlayerId,
+            byte[] payload)
+        {
+            try
+            {
+                if (senderPlayerId == 0u)
+                {
+                    senderPlayerId = ResolveRemoteRoomPlayerId();
+                }
+
+                if (senderPlayerId == 0u || senderPlayerId == PlayerId)
+                    return;
+                UpgradeChoiceSubmittedReceived?.Invoke(
+                    senderPlayerId,
+                    UpgradeNetworkCodec.DecodeChoice(payload));
+            }
+            catch (Exception exception) { Fail(exception.Message); }
+        }
+
+        private uint ResolveRemoteRoomPlayerId()
+        {
+            IReadOnlyList<RoomPlayerSnapshot> players =
+                CurrentRoomState?.Players;
+
+            if (players == null)
+            {
+                return 0u;
+            }
+
+            uint remotePlayerId = 0u;
+            for (int i = 0; i < players.Count; i++)
+            {
+                uint candidateId = players[i].PlayerId;
+                if (candidateId == 0u || candidateId == PlayerId)
+                {
+                    continue;
+                }
+
+                if (remotePlayerId != 0u)
+                {
+                    return 0u;
+                }
+
+                remotePlayerId = candidateId;
+            }
+
+            return remotePlayerId;
+        }
+
+        private void HandleUpgradeCompleted(byte[] payload)
+        {
+            try
+            {
+                UpgradeCompletedReceived?.Invoke(
+                    UpgradeNetworkCodec.DecodeCompleted(payload));
+            }
+            catch (Exception exception) { Fail(exception.Message); }
+        }
+
         private void HandlePlayerShotEvent(
             uint senderPlayerId,
             byte[] payload)
@@ -1718,6 +1860,13 @@ namespace TopDownRoguelike.Networking.Client
                 throw new ObjectDisposedException(
                     nameof(NetworkClient));
             }
+        }
+
+        private void EnsureInRoom()
+        {
+            if (State != NetworkClientState.InRoom)
+                throw new InvalidOperationException(
+                    "Network client must be in a room before sending upgrade messages.");
         }
     }
 }

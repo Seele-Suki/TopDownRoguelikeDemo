@@ -339,8 +339,11 @@ namespace TopDownRoguelike.Networking.Protocol
                             case MessageType.UdpPong:
                             case MessageType.WorldEntitySpawned:
                             case MessageType.WorldEntityRemoved:
-                            case MessageType.SharedExperienceSnapshot:
-                                return true;
+                case MessageType.SharedExperienceSnapshot:
+                case MessageType.UpgradeStarted:
+                case MessageType.UpgradeChoiceSubmitted:
+                case MessageType.UpgradeCompleted:
+                    return true;
 
                 case MessageType.Invalid:
                 default:

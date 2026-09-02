@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using TopDownRoguelike.Gameplay.Bosses;
 using TopDownRoguelike.Gameplay.Characters;
+using TopDownRoguelike.Gameplay.Core;
 using TopDownRoguelike.Gameplay.Enemies;
 using TopDownRoguelike.Gameplay.Experience;
+using TopDownRoguelike.Gameplay.Upgrades;
 using TopDownRoguelike.Gameplay.Weapons;
 using TopDownRoguelike.Gameplay.UI;
 using TopDownRoguelike.Infrastructure;
@@ -51,6 +54,9 @@ namespace TopDownRoguelike.Gameplay.Networking
         private NetworkClient shotgunEventClient;
         private uint lastSharedExperienceSequence;
         private ClientWorldSnapshotConsumer clientWorldSnapshotConsumer;
+        private NetworkUpgradeCoordinator networkUpgradeCoordinator;
+        private LevelSystem hostUpgradeLevelSystem;
+        private NetworkClient upgradeMessageClient;
 
         public NetworkPlayerRegistry Registry =>
             registry;
@@ -194,6 +200,8 @@ namespace TopDownRoguelike.Gameplay.Networking
                 SubscribeToRemoteInput(
                     networkBehaviour.Client);
 
+                TryConfigureNetworkUpgradeCoordinator();
+
                 if (!TryConfigureHostStatePublisher(
                         localPlayerId,
                         remotePlayerId,
@@ -257,6 +265,8 @@ namespace TopDownRoguelike.Gameplay.Networking
 
                 ConfigureHostSharedExperiencePublisher(
                     networkBehaviour.Client.SendSharedExperienceSnapshot);
+
+                SubscribeToHostUpgradeLevel();
 
                 if (enabled &&
                     !TryConfigureHostShotPublisher(
@@ -333,6 +343,8 @@ namespace TopDownRoguelike.Gameplay.Networking
                 ConfigureClientWorldSnapshotConsumer(
                     networkBehaviour.Client,
                     hostPlayerId);
+
+                TryConfigureNetworkUpgradeCoordinator();
             }
 
             if (enabled)
@@ -344,6 +356,9 @@ namespace TopDownRoguelike.Gameplay.Networking
                     networkBehaviour.Client);
 
                 SubscribeToRemoteShotgunEvents(
+                    networkBehaviour.Client);
+
+                SubscribeToClientUpgradeMessages(
                     networkBehaviour.Client);
 
                 networkBehaviour.Client.SharedExperienceSnapshotReceived +=
@@ -995,6 +1010,295 @@ namespace TopDownRoguelike.Gameplay.Networking
                 player.TryGetComponent(out NetworkEntityId identifier))
             {
                 entityRegistry.TryRegister(identifier);
+            }
+        }
+
+        private void TryConfigureNetworkUpgradeCoordinator()
+        {
+            UpgradeManager upgradeManager =
+                FindObjectOfType<UpgradeManager>();
+            GameManager gameManager =
+                FindObjectOfType<GameManager>();
+
+            if (upgradeManager == null || gameManager == null)
+            {
+                Debug.LogWarning(
+                    "NetworkGameBootstrap: upgrade references are missing.",
+                    this);
+                return;
+            }
+
+            networkUpgradeCoordinator =
+                GetComponent<NetworkUpgradeCoordinator>();
+            if (networkUpgradeCoordinator == null)
+            {
+                networkUpgradeCoordinator =
+                    gameObject.AddComponent<NetworkUpgradeCoordinator>();
+            }
+
+            networkUpgradeCoordinator.Configure(
+                upgradeManager,
+                gameManager);
+        }
+
+        private void SubscribeToHostUpgradeLevel()
+        {
+            if (!GameSession.IsHost ||
+                networkUpgradeCoordinator == null ||
+                localPlayer == null ||
+                !localPlayer.TryGetComponent(
+                    out hostUpgradeLevelSystem))
+            {
+                return;
+            }
+
+            hostUpgradeLevelSystem.OnLevelUp +=
+                HandleHostUpgradeLevelUp;
+
+            networkUpgradeCoordinator.UpgradeStarted +=
+                HandleHostUpgradeStarted;
+            networkUpgradeCoordinator.UpgradeApplied +=
+                HandleHostUpgradeApplied;
+            networkUpgradeCoordinator.UpgradeCompleted +=
+                HandleHostUpgradeCompleted;
+            NetworkClient hostClient =
+                NetworkClientBehaviour.Instance.Client;
+            hostClient.UpgradeChoiceSubmittedReceived +=
+                HandleHostUpgradeChoiceSubmitted;
+        }
+
+        private void HandleHostUpgradeLevelUp(int newLevel)
+        {
+            if (networkUpgradeCoordinator == null ||
+                networkUpgradeCoordinator.State != NetworkUpgradeState.Idle)
+            {
+                return;
+            }
+
+            networkUpgradeCoordinator.BeginHostUpgrade(
+                unchecked((uint)newLevel));
+        }
+
+        private void HandleHostUpgradeStarted(
+            uint sequence,
+            IReadOnlyList<UpgradeData> options)
+        {
+            Debug.Log(
+                $"NetworkGameBootstrap: host upgrade started " +
+                $"sequence={sequence}, options={options?.Count ?? 0}",
+                this);
+
+            if (networkUpgradeCoordinator == null || options == null)
+            {
+                Debug.LogError(
+                    "NetworkGameBootstrap: host upgrade coordinator " +
+                    "or options are missing.",
+                    this);
+                return;
+            }
+
+            if (GameSession.IsHost)
+            {
+                networkUpgradeCoordinator.UpgradeManager
+                    .PresentNetworkOptions(
+                        networkUpgradeCoordinator.CurrentOptions,
+                        HandleHostUpgradeSelected);
+            }
+
+            NetworkClientBehaviour networkBehaviour =
+                NetworkClientBehaviour.Instance;
+
+            if (networkBehaviour == null ||
+                networkBehaviour.Client == null ||
+                !GameSession.IsHost)
+            {
+                Debug.LogError(
+                    "NetworkGameBootstrap: host network client is " +
+                    "unavailable while broadcasting upgrade.",
+                    this);
+                return;
+            }
+
+            var upgradeIds = new List<ushort>(options.Count);
+            foreach (UpgradeData option in options)
+            {
+                if (option == null || option.UpgradeId == 0)
+                {
+                    return;
+                }
+
+                upgradeIds.Add(option.UpgradeId);
+            }
+
+            try
+            {
+                networkBehaviour.Client.SendUpgradeStarted(
+                    new UpgradeStartedPayload(sequence, upgradeIds));
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    "NetworkGameBootstrap: failed to broadcast host " +
+                    $"upgrade: {exception.Message}",
+                    this);
+            }
+        }
+
+        private void HandleHostUpgradeSelected(
+            UpgradeData upgradeData)
+        {
+            NetworkClientBehaviour networkBehaviour =
+                NetworkClientBehaviour.Instance;
+
+            if (upgradeData == null ||
+                networkBehaviour == null ||
+                networkBehaviour.Client == null ||
+                networkUpgradeCoordinator == null)
+            {
+                return;
+            }
+
+            bool submitted = networkUpgradeCoordinator.TrySubmitChoice(
+                networkBehaviour.Client.PlayerId,
+                upgradeData.UpgradeId);
+            if (!submitted)
+            {
+                return;
+            }
+
+            networkUpgradeCoordinator.UpgradeManager
+                .SetNetworkWaiting(true);
+
+            if (networkUpgradeCoordinator.AllChoicesSubmitted)
+            {
+                networkUpgradeCoordinator.CompleteHostUpgrade();
+                networkUpgradeCoordinator.ResetState();
+            }
+        }
+
+        private void HandleHostUpgradeChoiceSubmitted(
+            uint senderPlayerId,
+            UpgradeChoicePayload payload)
+        {
+            if (networkUpgradeCoordinator == null || payload == null ||
+                payload.Sequence != networkUpgradeCoordinator.CurrentSequence)
+            {
+                return;
+            }
+
+            if (networkUpgradeCoordinator.TrySubmitChoice(
+                    senderPlayerId,
+                    payload.UpgradeId) &&
+                networkUpgradeCoordinator.AllChoicesSubmitted)
+            {
+                networkUpgradeCoordinator.CompleteHostUpgrade();
+                networkUpgradeCoordinator.ResetState();
+            }
+        }
+
+        private void HandleHostUpgradeApplied(
+            uint playerId,
+            UpgradeData upgradeData)
+        {
+            if (networkUpgradeCoordinator == null ||
+                registry == null ||
+                !registry.TryGetPlayer(playerId, out GameObject targetPlayer))
+            {
+                return;
+            }
+
+            networkUpgradeCoordinator.UpgradeManager
+                .ApplyUpgradeToPlayer(targetPlayer, upgradeData);
+        }
+
+        private void HandleHostUpgradeCompleted(
+            uint sequence,
+            IReadOnlyDictionary<uint, ushort> choices)
+        {
+            NetworkClient client = NetworkClientBehaviour.Instance?.Client;
+            if (client != null)
+            {
+                client.SendUpgradeCompleted(
+                    new UpgradeCompletedPayload(sequence, choices));
+            }
+
+            networkUpgradeCoordinator.UpgradeManager
+                .SetNetworkWaiting(false);
+            FindObjectOfType<UpgradePanelView>()?.Hide();
+            networkUpgradeCoordinator.ResetState();
+        }
+
+        private void SubscribeToClientUpgradeMessages(
+            NetworkClient client)
+        {
+            if (!GameSession.IsClient || client == null)
+            {
+                return;
+            }
+
+            upgradeMessageClient = client;
+            upgradeMessageClient.UpgradeStartedReceived +=
+                HandleClientUpgradeStarted;
+            upgradeMessageClient.UpgradeCompletedReceived +=
+                HandleClientUpgradeCompleted;
+        }
+
+        private void HandleClientUpgradeStarted(
+            UpgradeStartedPayload payload)
+        {
+            if (networkUpgradeCoordinator == null ||
+                payload == null ||
+                !networkUpgradeCoordinator.ApplyRemoteUpgradeStart(payload))
+            {
+                return;
+            }
+
+            UpgradeManager upgradeManager =
+                networkUpgradeCoordinator.UpgradeManager;
+            upgradeManager.PresentNetworkOptions(
+                networkUpgradeCoordinator.CurrentOptions,
+                HandleClientUpgradeSelected);
+        }
+
+        private void HandleClientUpgradeSelected(
+            UpgradeData upgradeData)
+        {
+            if (upgradeData == null ||
+                networkUpgradeCoordinator == null ||
+                upgradeMessageClient == null ||
+                networkUpgradeCoordinator.State !=
+                    NetworkUpgradeState.WaitingForChoices)
+            {
+                return;
+            }
+
+            upgradeMessageClient.SendUpgradeChoiceSubmitted(
+                new UpgradeChoicePayload(
+                    networkUpgradeCoordinator.CurrentSequence,
+                    upgradeData.UpgradeId));
+            networkUpgradeCoordinator.UpgradeManager
+                .SetNetworkWaiting(true);
+        }
+
+        private void HandleClientUpgradeCompleted(
+            UpgradeCompletedPayload payload)
+        {
+            if (networkUpgradeCoordinator == null ||
+                upgradeMessageClient == null || payload == null)
+            {
+                return;
+            }
+
+            if (networkUpgradeCoordinator.ApplyRemoteUpgradeCompletion(
+                    upgradeMessageClient.PlayerId,
+                    payload))
+            {
+                networkUpgradeCoordinator.UpgradeManager
+                    .SetNetworkWaiting(false);
+                UpgradePanelView panel =
+                    FindObjectOfType<UpgradePanelView>();
+                panel?.Hide();
+                networkUpgradeCoordinator.ResetState();
             }
         }
 
@@ -2021,6 +2325,38 @@ namespace TopDownRoguelike.Gameplay.Networking
 
         private void OnDestroy()
         {
+            if (hostUpgradeLevelSystem != null)
+            {
+                hostUpgradeLevelSystem.OnLevelUp -=
+                    HandleHostUpgradeLevelUp;
+                hostUpgradeLevelSystem = null;
+            }
+
+            if (networkUpgradeCoordinator != null)
+            {
+                networkUpgradeCoordinator.UpgradeStarted -=
+                    HandleHostUpgradeStarted;
+            }
+
+            if (upgradeMessageClient != null)
+            {
+                upgradeMessageClient.UpgradeStartedReceived -=
+                    HandleClientUpgradeStarted;
+                upgradeMessageClient.UpgradeCompletedReceived -=
+                    HandleClientUpgradeCompleted;
+                upgradeMessageClient = null;
+            }
+
+            if (networkUpgradeCoordinator != null)
+            {
+                networkUpgradeCoordinator.UpgradeStarted -=
+                    HandleHostUpgradeStarted;
+                networkUpgradeCoordinator.UpgradeApplied -=
+                    HandleHostUpgradeApplied;
+                networkUpgradeCoordinator.UpgradeCompleted -=
+                    HandleHostUpgradeCompleted;
+            }
+
             if (stateSnapshotClient != null)
             {
                 stateSnapshotClient

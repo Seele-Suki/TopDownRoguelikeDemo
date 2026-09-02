@@ -3,6 +3,7 @@ using TopDownRoguelike.Gameplay.Characters;
 using TopDownRoguelike.Gameplay.Experience;
 using TopDownRoguelike.Gameplay.Weapons;
 using TopDownRoguelike.Gameplay.UI;
+using TopDownRoguelike.Infrastructure;
 using UnityEngine;
 using TopDownRoguelike.Gameplay.Core;
 
@@ -25,6 +26,9 @@ namespace TopDownRoguelike.Gameplay.Upgrades
 
         private readonly List<UpgradeData> currentOptions = new List<UpgradeData>();
 
+        public IReadOnlyList<UpgradeData> CurrentOptions =>
+            currentOptions;
+
         private void OnEnable()
         {
             if (levelSystem != null)
@@ -43,25 +47,17 @@ namespace TopDownRoguelike.Gameplay.Upgrades
 
         private void HandleLevelUp(int newLevel)
         {
+            if (TopDownRoguelike.Infrastructure.GameSession.IsMultiplayer)
+            {
+                return;
+            }
+
             ShowUpgradeOptions();
         }
 
         private void ShowUpgradeOptions()
         {
-            currentOptions.Clear();
-
-            List<UpgradeData> candidateUpgrades = new List<UpgradeData>(availableUpgrades);
-
-            int optionCount = Mathf.Min(3, candidateUpgrades.Count);
-
-            for (int i = 0; i < optionCount; i++)
-            {
-                int randomIndex = Random.Range(0, candidateUpgrades.Count);
-                UpgradeData selectedUpgrade = candidateUpgrades[randomIndex];
-
-                currentOptions.Add(selectedUpgrade);
-                candidateUpgrades.RemoveAt(randomIndex);
-            }
+            GenerateUpgradeOptions();
 
             if (gameManager == null)
             {
@@ -83,7 +79,124 @@ namespace TopDownRoguelike.Gameplay.Upgrades
             gameManager.ResumeGame();
         }
 
-        private void ApplyUpgrade(UpgradeData upgradeData)
+        public IReadOnlyList<UpgradeData> GenerateUpgradeOptions()
+        {
+            currentOptions.Clear();
+
+            List<UpgradeData> candidateUpgrades =
+                new List<UpgradeData>(availableUpgrades);
+
+            int optionCount =
+                Mathf.Min(3, candidateUpgrades.Count);
+
+            for (int i = 0; i < optionCount; i++)
+            {
+                int randomIndex =
+                    UnityEngine.Random.Range(0, candidateUpgrades.Count);
+
+                UpgradeData selectedUpgrade =
+                    candidateUpgrades[randomIndex];
+
+                currentOptions.Add(selectedUpgrade);
+                candidateUpgrades.RemoveAt(randomIndex);
+            }
+
+            return currentOptions;
+        }
+
+        public bool TryGetUpgradeById(
+            ushort upgradeId,
+            out UpgradeData upgradeData)
+        {
+            upgradeData = null;
+
+            if (upgradeId == 0)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < availableUpgrades.Count; i++)
+            {
+                UpgradeData candidate = availableUpgrades[i];
+                if (candidate != null && candidate.UpgradeId == upgradeId)
+                {
+                    upgradeData = candidate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public void PresentNetworkOptions(
+            IReadOnlyList<UpgradeData> options,
+            System.Action<UpgradeData> selectCallback)
+        {
+            if (options == null || options.Count == 0 ||
+                gameManager == null || upgradePanelView == null)
+            {
+                throw new System.InvalidOperationException(
+                    "Network upgrade presentation is not configured.");
+            }
+
+            List<UpgradeData> optionsCopy =
+                new List<UpgradeData>(options);
+            currentOptions.Clear();
+            currentOptions.AddRange(optionsCopy);
+            gameManager.PauseGame();
+            upgradePanelView.Show(currentOptions, selectCallback);
+        }
+
+        public void SetNetworkWaiting(bool waiting)
+        {
+            if (upgradePanelView != null)
+            {
+                upgradePanelView.SetWaitingForRemotePlayer(waiting);
+            }
+        }
+
+        public void ApplyUpgrade(UpgradeData upgradeData)
+        {
+            ApplyUpgradeToComponents(
+                upgradeData,
+                playerController,
+                playerHealth,
+                playerShooter,
+                dashSkill,
+                shotgunSkill);
+
+            if (upgradeData != null)
+            {
+                Debug.Log(
+                    $"Selected upgrade: {upgradeData.UpgradeName}");
+            }
+        }
+
+        public void ApplyUpgradeToPlayer(
+            GameObject targetPlayer,
+            UpgradeData upgradeData)
+        {
+            if (targetPlayer == null)
+            {
+                return;
+            }
+
+            ApplyUpgradeToComponents(
+                upgradeData,
+                targetPlayer.GetComponent<PlayerController>(),
+                targetPlayer.GetComponent<PlayerHealth>(),
+                targetPlayer.GetComponent<PlayerShooter>(),
+                targetPlayer.GetComponent<DashSkill>(),
+                targetPlayer.GetComponent<ShotgunSkill>());
+        }
+
+        private static void ApplyUpgradeToComponents(
+            UpgradeData upgradeData,
+            PlayerController targetController,
+            PlayerHealth targetHealth,
+            PlayerShooter targetShooter,
+            DashSkill targetDash,
+            ShotgunSkill targetShotgun)
         {
             if (upgradeData == null)
             {
@@ -93,50 +206,53 @@ namespace TopDownRoguelike.Gameplay.Upgrades
             switch (upgradeData.UpgradeType)
             {
                 case UpgradeType.MoveSpeedUp:
-                    playerController.AddMoveSpeed(upgradeData.FloatValue);
+                    targetController?.AddMoveSpeed(
+                        upgradeData.FloatValue);
                     break;
 
                 case UpgradeType.MaxHealthUp:
-                    playerHealth.AddMaxHealth(upgradeData.IntValue);
+                    targetHealth?.ApplyAuthoritativeMaxHealthUpgrade(
+                        upgradeData.IntValue);
                     break;
 
                 case UpgradeType.FireRateUp:
-                    playerShooter.AddFireRate(upgradeData.FloatValue);
+                    targetShooter?.AddFireRate(
+                        upgradeData.FloatValue);
                     break;
 
                 case UpgradeType.ProjectileDamageUp:
-                    playerShooter.AddProjectileDamage(
+                    targetShooter?.AddProjectileDamage(
                         upgradeData.IntValue);
-
-                    shotgunSkill.AddProjectileDamage(
+                    targetShotgun?.AddProjectileDamage(
                         upgradeData.IntValue);
                     break;
 
                 case UpgradeType.DashCooldownDown:
-                    dashSkill.ReduceCooldown(upgradeData.FloatValue);
+                    targetDash?.ReduceCooldown(
+                        upgradeData.FloatValue);
                     break;
 
                 case UpgradeType.DashDurationUp:
-                    dashSkill.AddDashDuration(upgradeData.FloatValue);
+                    targetDash?.AddDashDuration(
+                        upgradeData.FloatValue);
                     break;
 
                 case UpgradeType.ShotgunProjectileCountUp:
-                    shotgunSkill.AddProjectileCount(
+                    targetShotgun?.AddProjectileCount(
                         upgradeData.IntValue);
                     break;
 
                 case UpgradeType.ShotgunCooldownDown:
-                    shotgunSkill.ReduceCooldown(
+                    targetShotgun?.ReduceCooldown(
                         upgradeData.FloatValue);
                     break;
 
                 case UpgradeType.ShotgunPenetrationUp:
-                    shotgunSkill.AddPenetration(
+                    targetShotgun?.AddPenetration(
                         upgradeData.IntValue);
                     break;
             }
 
-            Debug.Log($"Selected upgrade: {upgradeData.UpgradeName}");
         }
     }
 }

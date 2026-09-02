@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   upgradeName: "\u5C04\u901F\u63D0\u5347"
   description: "\u653B\u51FB\u51B7\u5374 -0.03 \u79D2"
+  upgradeId: 3
   upgradeType: 2
   floatValue: 0.03
   intValue: 0

@@ -57,6 +57,9 @@ namespace tdr::net
         std::vector<std::vector<std::uint8_t>>
         TakeWorldEntityRemovalPayloads();
         std::vector<std::vector<std::uint8_t>> TakeSharedExperiencePayloads();
+        std::vector<std::vector<std::uint8_t>> TakeUpgradeStartedPayloads();
+        std::vector<std::vector<std::uint8_t>> TakeUpgradeChoicePayloads();
+        std::vector<std::vector<std::uint8_t>> TakeUpgradeCompletedPayloads();
 
         void LeaveRoom();
 
@@ -175,5 +178,8 @@ namespace tdr::net
         std::vector<std::vector<std::uint8_t>>
         worldEntityRemovalPayloads_;
         std::vector<std::vector<std::uint8_t>> sharedExperiencePayloads_;
+        std::vector<std::vector<std::uint8_t>> upgradeStartedPayloads_;
+        std::vector<std::vector<std::uint8_t>> upgradeChoicePayloads_;
+        std::vector<std::vector<std::uint8_t>> upgradeCompletedPayloads_;
     };
 }

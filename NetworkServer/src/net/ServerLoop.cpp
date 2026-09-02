@@ -459,6 +459,83 @@ namespace tdr::net
                 }
             }
 
+            const auto forwardUpgradePayloads =
+                [&](const auto& payloads,
+                    tdr::protocol::MessageType messageType,
+                    bool hostOnly)
+            {
+                for (const auto& payload : payloads)
+                {
+                    try
+                    {
+                        if (!session.HasRoom() ||
+                            session.CurrentRoom().Status() !=
+                                tdr::room::RoomStatus::Started)
+                        {
+                            throw std::runtime_error(
+                                "Upgrade message requires a started room.");
+                        }
+
+                        const auto& room = session.CurrentRoom();
+                        const bool senderIsHost =
+                            session.PlayerId() == room.HostPlayerId();
+
+                        if ((hostOnly && !senderIsHost) ||
+                            (!hostOnly && senderIsHost))
+                        {
+                            throw std::invalid_argument(
+                                "Upgrade message sender role is invalid.");
+                        }
+
+                        std::uint32_t targetPlayerId =
+                            hostOnly ? 0U : room.HostPlayerId();
+
+                        if (hostOnly)
+                        {
+                            for (std::size_t i = 0; i < room.PlayerCount(); ++i)
+                            {
+                                if (room.PlayerAt(i).playerId != room.HostPlayerId())
+                                {
+                                    targetPlayerId = room.PlayerAt(i).playerId;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (targetPlayerId == 0U)
+                            throw std::runtime_error("Upgrade room target is missing.");
+
+                        coordinator_.SendPacketToPlayer(
+                            targetPlayerId,
+                            messageType,
+                            payload);
+                    }
+                    catch (const std::exception& exception)
+                    {
+                        const std::vector<std::uint8_t> errorPayload(
+                            exception.what(),
+                            exception.what() + std::strlen(exception.what()));
+                        coordinator_.SendPacketToPlayer(
+                            session.PlayerId(),
+                            tdr::protocol::MessageType::ErrorMessage,
+                            errorPayload);
+                    }
+                }
+            };
+
+            forwardUpgradePayloads(
+                session.TakeUpgradeStartedPayloads(),
+                tdr::protocol::MessageType::UpgradeStarted,
+                true);
+            forwardUpgradePayloads(
+                session.TakeUpgradeChoicePayloads(),
+                tdr::protocol::MessageType::UpgradeChoiceSubmitted,
+                false);
+            forwardUpgradePayloads(
+                session.TakeUpgradeCompletedPayloads(),
+                tdr::protocol::MessageType::UpgradeCompleted,
+                true);
+
             const auto outgoingPackets =
                 session.TakeOutgoingPackets();
 

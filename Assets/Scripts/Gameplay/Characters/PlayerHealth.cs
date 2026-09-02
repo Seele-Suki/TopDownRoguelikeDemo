@@ -88,6 +88,21 @@ namespace TopDownRoguelike.Gameplay.Characters
                 return;
             }
 
+            ApplyMaxHealthUpgrade(amount);
+        }
+
+        public void ApplyAuthoritativeMaxHealthUpgrade(int amount)
+        {
+            ApplyMaxHealthUpgrade(amount);
+        }
+
+        private void ApplyMaxHealthUpgrade(int amount)
+        {
+            if (amount <= 0)
+            {
+                return;
+            }
+
             maxHealth += amount;
             currentHealth += amount;
 

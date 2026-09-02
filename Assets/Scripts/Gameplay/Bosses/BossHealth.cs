@@ -1,5 +1,6 @@
 using System;
 using TopDownRoguelike.Gameplay.Combat;
+using TopDownRoguelike.Infrastructure;
 using UnityEngine;
 
 namespace TopDownRoguelike.Gameplay.Bosses
@@ -41,7 +42,8 @@ namespace TopDownRoguelike.Gameplay.Bosses
 
         public void TakeDamage(DamageInfo damageInfo)
         {
-            if (isDead || damageInfo.Damage <= 0)
+            if (GameSession.IsClient ||
+                isDead || damageInfo.Damage <= 0)
             {
                 return;
             }
@@ -62,6 +64,37 @@ namespace TopDownRoguelike.Gameplay.Bosses
             {
                 Die();
             }
+        }
+
+        public bool ApplyAuthoritativeState(
+            int authoritativeCurrentHealth,
+            int authoritativeMaxHealth,
+            bool authoritativeIsDead)
+        {
+            if (authoritativeMaxHealth != MaxHealth ||
+                authoritativeMaxHealth < 1 ||
+                authoritativeCurrentHealth < 0 ||
+                authoritativeCurrentHealth > authoritativeMaxHealth ||
+                authoritativeIsDead !=
+                    (authoritativeCurrentHealth == 0))
+            {
+                return false;
+            }
+
+            bool wasDead = isDead;
+            currentHealth = authoritativeCurrentHealth;
+            isDead = authoritativeIsDead;
+
+            OnHealthChanged?.Invoke(
+                currentHealth,
+                MaxHealth);
+
+            if (!wasDead && isDead)
+            {
+                OnDied?.Invoke();
+            }
+
+            return true;
         }
 
         private void Die()

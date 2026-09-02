@@ -340,6 +340,8 @@ namespace TopDownRoguelike.Networking.Protocol
                             case MessageType.WorldEntitySpawned:
                             case MessageType.WorldEntityRemoved:
                 case MessageType.SharedExperienceSnapshot:
+                case MessageType.BossCombatState:
+                case MessageType.GameResult:
                 case MessageType.UpgradeStarted:
                 case MessageType.UpgradeChoiceSubmitted:
                 case MessageType.UpgradeCompleted:

@@ -60,6 +60,9 @@ namespace tdr::net
         std::vector<std::vector<std::uint8_t>> TakeUpgradeStartedPayloads();
         std::vector<std::vector<std::uint8_t>> TakeUpgradeChoicePayloads();
         std::vector<std::vector<std::uint8_t>> TakeUpgradeCompletedPayloads();
+        std::vector<std::vector<std::uint8_t>> TakeBossCombatStatePayloads();
+        std::vector<std::vector<std::uint8_t>> TakeGameResultPayloads();
+        std::vector<std::vector<std::uint8_t>> TakePlayerDiedPayloads();
 
         void LeaveRoom();
 
@@ -181,5 +184,8 @@ namespace tdr::net
         std::vector<std::vector<std::uint8_t>> upgradeStartedPayloads_;
         std::vector<std::vector<std::uint8_t>> upgradeChoicePayloads_;
         std::vector<std::vector<std::uint8_t>> upgradeCompletedPayloads_;
+        std::vector<std::vector<std::uint8_t>> bossCombatStatePayloads_;
+        std::vector<std::vector<std::uint8_t>> gameResultPayloads_;
+        std::vector<std::vector<std::uint8_t>> playerDiedPayloads_;
     };
 }

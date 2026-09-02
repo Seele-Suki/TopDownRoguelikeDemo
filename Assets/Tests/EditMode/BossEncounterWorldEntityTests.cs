@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using TopDownRoguelike.Networking.Protocol;
 
 namespace TopDownRoguelike.Tests.EditMode
 {
@@ -94,6 +95,134 @@ namespace TopDownRoguelike.Tests.EditMode
             Assert.That(
                 currentBoss,
                 Is.SameAs(bossObject));
+        }
+
+        [Test]
+        public void BossSpawnPublisher_ExistsForNetworkAppearance()
+        {
+            Type publisherType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "HostBossSpawnPublisher");
+
+            Assert.That(
+                publisherType,
+                Is.Not.Null,
+                "HostBossSpawnPublisher must exist.");
+
+            Assert.That(
+                publisherType.GetMethod(
+                    "Configure",
+                    BindingFlags.Instance |
+                    BindingFlags.Public),
+                Is.Not.Null,
+                "HostBossSpawnPublisher must expose Configure.");
+        }
+
+        [Test]
+        public void ClientWorldSnapshotConsumer_AcceptsBossSpawnRecords()
+        {
+            Type consumerType =
+                FindType(
+                    "TopDownRoguelike.Gameplay.Networking." +
+                    "ClientWorldSnapshotConsumer");
+
+            Assert.That(consumerType, Is.Not.Null);
+
+            WorldEntityRecord record =
+                new WorldEntityRecord(
+                    0x20000001u,
+                    NetworkEntityType.Boss,
+                    WorldEntityLifecycle.Spawn,
+                    WorldEntityFlags.Active,
+                    1f,
+                    2f,
+                    0f,
+                    100,
+                    100,
+                    1);
+
+            GameObject consumerObject =
+                new GameObject("Client World Consumer");
+            createdObjects.Add(consumerObject);
+            consumerObject.SetActive(false);
+
+            Component consumer =
+                consumerObject.AddComponent(consumerType);
+
+            MethodInfo enqueueSpawn =
+                consumerType.GetMethod(
+                    "EnqueueSpawn",
+                    BindingFlags.Instance |
+                    BindingFlags.Public);
+
+            Assert.That(enqueueSpawn, Is.Not.Null);
+            Assert.That(
+                enqueueSpawn.Invoke(
+                    consumer,
+                    new object[] { record }),
+                Is.True);
+        }
+
+        [Test]
+        public void BossHealth_ExposesAuthoritativeStateEntryPoint()
+        {
+            Type healthType = FindType(
+                "TopDownRoguelike.Gameplay.Bosses.BossHealth");
+            Type controllerType = FindType(
+                "TopDownRoguelike.Gameplay.Bosses.BossController");
+
+            Assert.That(healthType, Is.Not.Null);
+            Assert.That(
+                healthType.GetMethod(
+                    "ApplyAuthoritativeState",
+                    BindingFlags.Instance |
+                    BindingFlags.Public),
+                Is.Not.Null);
+            Assert.That(controllerType, Is.Not.Null);
+            Assert.That(
+                controllerType.GetMethod(
+                    "ApplyAuthoritativePhase",
+                    BindingFlags.Instance |
+                    BindingFlags.Public),
+                Is.Not.Null);
+        }
+
+        [Test]
+        public void ClientWorldSnapshotConsumer_AcceptsBossDeathRemoval()
+        {
+            Type consumerType = FindType(
+                "TopDownRoguelike.Gameplay.Networking." +
+                "ClientWorldSnapshotConsumer");
+            Assert.That(consumerType, Is.Not.Null);
+
+            GameObject consumerObject =
+                new GameObject("Client World Consumer Death");
+            createdObjects.Add(consumerObject);
+            consumerObject.SetActive(false);
+
+            Component consumer =
+                consumerObject.AddComponent(consumerType);
+            MethodInfo enqueueRemoval = consumerType.GetMethod(
+                "EnqueueRemoval",
+                BindingFlags.Instance |
+                BindingFlags.Public,
+                null,
+                new[] { typeof(WorldEntityRemovedPayload) },
+                null);
+
+            Assert.That(enqueueRemoval, Is.Not.Null);
+            Assert.That(
+                enqueueRemoval.Invoke(
+                    consumer,
+                    new object[]
+                    {
+                        new WorldEntityRemovedPayload(
+                            0x20000001u,
+                            NetworkEntityType.Boss,
+                            WorldEntityRemovalReason.Died)
+                    }),
+                Is.True);
         }
 
         private static Type FindType(

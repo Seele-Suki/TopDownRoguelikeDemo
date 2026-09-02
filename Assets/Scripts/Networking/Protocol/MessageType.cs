@@ -41,6 +41,7 @@ namespace TopDownRoguelike.Networking.Protocol
         UpgradeCompleted = 48,
         BossPhaseChanged = 49,
         GameResult = 50
-        ,SharedExperienceSnapshot = 51
+        ,SharedExperienceSnapshot = 51,
+        BossCombatState = 52
     }
 }

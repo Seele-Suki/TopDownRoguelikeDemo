@@ -45,7 +45,8 @@ namespace tdr::protocol
         UpgradeCompleted = 48,
         BossPhaseChanged = 49,
         GameResult = 50,
-        SharedExperienceSnapshot = 51
+        SharedExperienceSnapshot = 51,
+        BossCombatState = 52
     };
 
     [[nodiscard]]
@@ -89,6 +90,7 @@ namespace tdr::protocol
         case MessageType::BossPhaseChanged:
         case MessageType::GameResult:
         case MessageType::SharedExperienceSnapshot:
+        case MessageType::BossCombatState:
             return true;
 
         case MessageType::Invalid:

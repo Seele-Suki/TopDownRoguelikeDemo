@@ -4,6 +4,7 @@ using TopDownRoguelike.Gameplay.Enemies;
 using TopDownRoguelike.Gameplay.UI;
 using TopDownRoguelike.Networking.Gameplay;
 using TopDownRoguelike.Networking.Protocol;
+using TopDownRoguelike.Infrastructure;
 using UnityEngine;
 
 namespace TopDownRoguelike.Gameplay.Bosses
@@ -37,6 +38,8 @@ namespace TopDownRoguelike.Gameplay.Bosses
         [SerializeField] private GameObject currentBoss;
 
         private BossHealth currentBossHealth;
+
+        public event System.Action<GameObject> BossSpawned;
 
         public GameObject CurrentBoss =>
             currentBoss;
@@ -80,6 +83,11 @@ namespace TopDownRoguelike.Gameplay.Bosses
 
         private void HandleBossTransitionRequested()
         {
+            if (!GameSession.IsHost)
+            {
+                return;
+            }
+
             if (encounterStarted)
             {
                 return;
@@ -154,11 +162,85 @@ namespace TopDownRoguelike.Gameplay.Bosses
 
             currentBossHealth.OnDied += HandleBossDied;
 
+            BossSpawned?.Invoke(currentBoss);
+
             bossHealthView.Bind(currentBossHealth);
 
             gameManager.StartBossBattle();
 
             Debug.Log("Boss battle started.");
+        }
+
+        public GameObject CreateClientBoss(
+            WorldEntityRecord record)
+        {
+            if (!GameSession.IsClient ||
+                record == null ||
+                record.EntityType != NetworkEntityType.Boss ||
+                record.EntityId == 0u ||
+                bossPrefab == null)
+            {
+                return null;
+            }
+
+            GameObject clientBoss =
+                Instantiate(
+                    bossPrefab,
+                    new Vector3(
+                        record.PositionX,
+                        record.PositionY,
+                        0f),
+                    Quaternion.Euler(
+                        0f,
+                        0f,
+                        record.RotationDegrees));
+
+            NetworkEntityId identifier =
+                clientBoss.GetComponent<NetworkEntityId>();
+
+            if (identifier == null)
+            {
+                identifier =
+                    clientBoss.AddComponent<NetworkEntityId>();
+            }
+
+            if (!identifier.IsAssigned &&
+                !identifier.TryAssign(
+                    record.EntityId,
+                    NetworkEntityType.Boss))
+            {
+                Destroy(clientBoss);
+                return null;
+            }
+
+            if (identifier.EntityId != record.EntityId ||
+                identifier.EntityType != NetworkEntityType.Boss)
+            {
+                Destroy(clientBoss);
+                return null;
+            }
+
+            if (clientBoss.TryGetComponent(
+                    out BossController controller))
+            {
+                controller.enabled = false;
+            }
+
+            currentBoss = clientBoss;
+
+            Debug.Log(
+                $"BossEncounterController: created client Boss " +
+                $"entity={record.EntityId} position=({record.PositionX:F2}," +
+                $"{record.PositionY:F2})");
+
+            if (clientBoss.TryGetComponent(
+                    out BossHealth health))
+            {
+                currentBossHealth = health;
+                bossHealthView?.Bind(health);
+            }
+
+            return clientBoss;
         }
 
         private Vector3 GetBossSpawnPosition()
@@ -231,10 +313,17 @@ namespace TopDownRoguelike.Gameplay.Bosses
 
             currentBoss = null;
 
-            gameManager.NotifyVictory();
-
             Debug.Log(
-                "Boss defeated. Victory requested.");
+                "Boss defeated. Scheduling victory after network " +
+                "death event dispatch.");
+            StartCoroutine(NotifyVictoryNextFrame());
+        }
+
+        private IEnumerator NotifyVictoryNextFrame()
+        {
+            yield return null;
+            gameManager.NotifyVictory();
+            Debug.Log("Victory requested after Boss death dispatch.");
         }
 
         private void UnsubscribeFromBoss()

@@ -459,6 +459,118 @@ namespace tdr::net
                 }
             }
 
+            const auto bossStatePayloads =
+                session.TakeBossCombatStatePayloads();
+            for (const auto& payload : bossStatePayloads)
+            {
+                try
+                {
+                    if (!session.HasRoom() ||
+                        session.CurrentRoom().Status() !=
+                            tdr::room::RoomStatus::Started ||
+                        session.PlayerId() !=
+                            session.CurrentRoom().HostPlayerId() ||
+                        payload.size() != 1U ||
+                        payload[0] < 1U || payload[0] > 3U)
+                    {
+                        throw std::invalid_argument(
+                            "Invalid Boss combat state message.");
+                    }
+
+                    const auto& room = session.CurrentRoom();
+                    std::uint32_t guestPlayerId = 0U;
+                    for (std::size_t i = 0; i < room.PlayerCount(); ++i)
+                    {
+                        if (room.PlayerAt(i).playerId != room.HostPlayerId())
+                        {
+                            guestPlayerId = room.PlayerAt(i).playerId;
+                            break;
+                        }
+                    }
+                    if (guestPlayerId == 0U)
+                        throw std::runtime_error("Boss state room target is missing.");
+
+                    coordinator_.SendPacketToPlayer(
+                        guestPlayerId,
+                        tdr::protocol::MessageType::BossCombatState,
+                        payload);
+                }
+                catch (const std::exception& exception)
+                {
+                    const std::vector<std::uint8_t> errorPayload(
+                        exception.what(), exception.what() + std::strlen(exception.what()));
+                    coordinator_.SendPacketToPlayer(
+                        session.PlayerId(),
+                        tdr::protocol::MessageType::ErrorMessage,
+                        errorPayload);
+                }
+            }
+
+            const auto gameResultPayloads = session.TakeGameResultPayloads();
+            for (const auto& payload : gameResultPayloads)
+            {
+                try
+                {
+                    if (!session.HasRoom() ||
+                        session.CurrentRoom().Status() != tdr::room::RoomStatus::Started ||
+                        session.PlayerId() != session.CurrentRoom().HostPlayerId() ||
+                        payload.size() != 1U || payload[0] < 1U || payload[0] > 2U)
+                        throw std::invalid_argument("Invalid game result message.");
+
+                    const auto& room = session.CurrentRoom();
+                    std::uint32_t guestPlayerId = 0U;
+                    for (std::size_t i = 0; i < room.PlayerCount(); ++i)
+                    {
+                        if (room.PlayerAt(i).playerId != room.HostPlayerId())
+                        {
+                            guestPlayerId = room.PlayerAt(i).playerId;
+                            break;
+                        }
+                    }
+                    if (guestPlayerId == 0U)
+                        throw std::runtime_error("Game result room target is missing.");
+                    coordinator_.SendPacketToPlayer(
+                        guestPlayerId,
+                        tdr::protocol::MessageType::GameResult,
+                        payload);
+                }
+                catch (const std::exception& exception)
+                {
+                    const std::vector<std::uint8_t> errorPayload(
+                        exception.what(), exception.what() + std::strlen(exception.what()));
+                    coordinator_.SendPacketToPlayer(
+                        session.PlayerId(),
+                        tdr::protocol::MessageType::ErrorMessage,
+                        errorPayload);
+                }
+            }
+
+            const auto playerDiedPayloads = session.TakePlayerDiedPayloads();
+            for (const auto& payload : playerDiedPayloads)
+            {
+                try
+                {
+                    if (!session.HasRoom() ||
+                        session.CurrentRoom().Status() != tdr::room::RoomStatus::Started ||
+                        session.PlayerId() == session.CurrentRoom().HostPlayerId() ||
+                        !payload.empty())
+                        throw std::invalid_argument("Invalid PlayerDied message.");
+                    coordinator_.SendPacketToPlayer(
+                        session.CurrentRoom().HostPlayerId(),
+                        tdr::protocol::MessageType::PlayerDied,
+                        payload);
+                }
+                catch (const std::exception& exception)
+                {
+                    const std::vector<std::uint8_t> errorPayload(
+                        exception.what(), exception.what() + std::strlen(exception.what()));
+                    coordinator_.SendPacketToPlayer(
+                        session.PlayerId(),
+                        tdr::protocol::MessageType::ErrorMessage,
+                        errorPayload);
+                }
+            }
+
             const auto forwardUpgradePayloads =
                 [&](const auto& payloads,
                     tdr::protocol::MessageType messageType,

@@ -1,4 +1,5 @@
 using TopDownRoguelike.Gameplay.Combat;
+using TopDownRoguelike.Gameplay.Bosses;
 using TopDownRoguelike.Gameplay.Enemies;
 using UnityEngine;
 
@@ -58,12 +59,22 @@ namespace TopDownRoguelike.Gameplay.Weapons
             EnemyHealth enemyHealth =
                 other.GetComponentInParent<EnemyHealth>();
 
-            if (enemyHealth != null)
+            BossHealth bossHealth =
+                other.GetComponentInParent<BossHealth>();
+
+            if (enemyHealth != null || bossHealth != null)
             {
                 DamageInfo damageInfo =
                     new DamageInfo(damage, moveDirection, owner);
 
-                enemyHealth.TakeDamage(damageInfo);
+                if (enemyHealth != null)
+                {
+                    enemyHealth.TakeDamage(damageInfo);
+                }
+                else
+                {
+                    bossHealth.TakeDamage(damageInfo);
+                }
 
                 if (remainingPenetrations > 0)
                 {

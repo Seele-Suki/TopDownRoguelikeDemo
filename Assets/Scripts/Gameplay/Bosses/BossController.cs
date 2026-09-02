@@ -29,6 +29,17 @@ namespace TopDownRoguelike.Gameplay.Bosses
         public byte CurrentPhase =>
             isPhaseTwo ? (byte)2 : (byte)1;
 
+        public bool ApplyAuthoritativePhase(byte phase)
+        {
+            if (phase < 1 || phase > 2)
+            {
+                return false;
+            }
+
+            isPhaseTwo = phase == 2;
+            return true;
+        }
+
         [SerializeField] private float nextAttackTime;
 
         private Rigidbody2D rb;

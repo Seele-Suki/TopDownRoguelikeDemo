@@ -287,6 +287,17 @@ namespace
         });
     }
 
+    std::vector<std::uint8_t> CreateBossRemovalPayload()
+    {
+        using namespace tdr::protocol;
+
+        return WorldEntityRemovedCodec::Encode({
+            0x20000001U,
+            WorldEntityType::Boss,
+            WorldEntityRemovalReason::Died
+        });
+    }
+
     void HostRemovalTargetsGuestAndPreservesPayload()
     {
         RoomFixture fixture;
@@ -302,6 +313,24 @@ namespace
             forwarded.targetPlayerId == fixture.guest.PlayerId() &&
             forwarded.payload == payload,
             "Enemy removal was not forwarded to the guest."
+        );
+    }
+
+    void HostBossRemovalTargetsGuestAndPreservesPayload()
+    {
+        RoomFixture fixture;
+        fixture.StartRoom();
+        const auto payload = CreateBossRemovalPayload();
+
+        const auto forwarded =
+            tdr::net::WorldEntityRemovalForwarder::Forward(
+                fixture.host,
+                payload);
+
+        Require(
+            forwarded.targetPlayerId == fixture.guest.PlayerId() &&
+            forwarded.payload == payload,
+            "Boss removal was not forwarded to the guest."
         );
     }
 
@@ -354,6 +383,7 @@ int main()
         InvalidPayloadCannotForward();
         TcpSessionQueuesSpawnPayload();
         HostRemovalTargetsGuestAndPreservesPayload();
+        HostBossRemovalTargetsGuestAndPreservesPayload();
         GuestCannotForwardRemoval();
         TcpSessionQueuesRemovalPayload();
         std::cout << "WorldEntitySpawnForwarder tests passed.\n";

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 436a8b8a6d15a704b94ffe5d1874eead, type: 3}
   m_Name: MainBossData
   m_EditorClassIdentifier: 
-  maxHealth: 150
+  maxHealth: 20
   moveSpeed: 2
   stopDistance: 3.5
   attackCooldown: 1.8

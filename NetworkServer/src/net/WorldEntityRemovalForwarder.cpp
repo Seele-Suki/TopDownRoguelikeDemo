@@ -55,7 +55,13 @@ namespace tdr::net
             removed.reason ==
                 tdr::protocol::WorldEntityRemovalReason::Despawned;
 
-        if (!isEnemyDeath && !isExperienceOrbDespawn)
+        const bool isBossDeath =
+            removed.entityType ==
+                tdr::protocol::WorldEntityType::Boss &&
+            removed.reason ==
+                tdr::protocol::WorldEntityRemovalReason::Died;
+
+        if (!isEnemyDeath && !isBossDeath && !isExperienceOrbDespawn)
         {
             throw std::invalid_argument(
                 "World entity removal type and reason are invalid."

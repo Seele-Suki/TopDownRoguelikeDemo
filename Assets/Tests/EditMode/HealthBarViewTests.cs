@@ -141,6 +141,19 @@ namespace TopDownRoguelike.Tests.EditMode
             }
         }
 
+        [Test]
+        public void BossHealthView_ExposesHideEntryPoint()
+        {
+            Type viewType = FindType(
+                "TopDownRoguelike.Gameplay.UI.BossHealthView");
+
+            Assert.That(viewType, Is.Not.Null);
+            Assert.That(
+                viewType.GetMethod("Hide"),
+                Is.Not.Null,
+                "BossHealthView must expose Hide for network removal.");
+        }
+
         private static void InvokeTakeDamage(
             Component playerHealth,
             int damage)

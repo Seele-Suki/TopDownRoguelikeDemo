@@ -115,6 +115,15 @@ namespace TopDownRoguelike.Networking.Client
         public event Action<SharedExperienceSnapshotPayload>
             SharedExperienceSnapshotReceived;
 
+        public event Action<BossCombatStatePayload>
+            BossCombatStateReceived;
+
+        public event Action<GameResultPayload>
+            GameResultReceived;
+
+        public event Action
+            PlayerDiedReceived;
+
         public event Action<UpgradeStartedPayload>
             UpgradeStartedReceived;
 
@@ -682,6 +691,39 @@ namespace TopDownRoguelike.Networking.Client
             }
         }
 
+        public void SendBossCombatState(BossCombatStatePayload payload)
+        {
+            ThrowIfDisposed();
+            EnsureInRoom();
+            if (!GameSession.IsHost)
+                throw new InvalidOperationException(
+                    "Only the room host can send Boss combat state.");
+            tcpTransport.Send(
+                MessageType.BossCombatState,
+                BossCombatStateCodec.Encode(payload));
+        }
+
+        public void SendGameResult(GameResultPayload payload)
+        {
+            ThrowIfDisposed();
+            EnsureInRoom();
+            if (!GameSession.IsHost)
+                throw new InvalidOperationException(
+                    "Only the room host can send game result.");
+            tcpTransport.Send(
+                MessageType.GameResult,
+                GameResultCodec.Encode(payload));
+        }
+
+        public void SendPlayerDied()
+        {
+            ThrowIfDisposed();
+            EnsureInRoom();
+            tcpTransport.Send(
+                MessageType.PlayerDied,
+                Array.Empty<byte>());
+        }
+
         public void SendUpgradeStarted(
             UpgradeStartedPayload payload)
         {
@@ -1082,6 +1124,35 @@ namespace TopDownRoguelike.Networking.Client
             }
 
             if (transportEvent.TransportKind == NetworkTransportKind.Tcp &&
+                transportEvent.PacketType == MessageType.BossCombatState &&
+                State == NetworkClientState.InRoom)
+            {
+                HandleBossCombatState(transportEvent.Payload);
+                return;
+            }
+
+            if (transportEvent.TransportKind == NetworkTransportKind.Tcp &&
+                transportEvent.PacketType == MessageType.GameResult &&
+                State == NetworkClientState.InRoom)
+            {
+                HandleGameResult(transportEvent.Payload);
+                return;
+            }
+
+            if (transportEvent.TransportKind == NetworkTransportKind.Tcp &&
+                transportEvent.PacketType == MessageType.PlayerDied &&
+                State == NetworkClientState.InRoom)
+            {
+                if (transportEvent.Payload.Length != 0)
+                {
+                    Fail("PlayerDied payload must be empty.");
+                    return;
+                }
+                PlayerDiedReceived?.Invoke();
+                return;
+            }
+
+            if (transportEvent.TransportKind == NetworkTransportKind.Tcp &&
                 transportEvent.PacketType == MessageType.UpgradeChoiceSubmitted &&
                 State == NetworkClientState.InRoom)
             {
@@ -1451,6 +1522,32 @@ namespace TopDownRoguelike.Networking.Client
             {
                 SharedExperienceSnapshotReceived?.Invoke(
                     SharedExperienceSnapshotCodec.Decode(payload));
+            }
+            catch (Exception exception)
+            {
+                Fail(exception.Message);
+            }
+        }
+
+        private void HandleBossCombatState(byte[] payload)
+        {
+            try
+            {
+                BossCombatStateReceived?.Invoke(
+                    BossCombatStateCodec.Decode(payload));
+            }
+            catch (Exception exception)
+            {
+                Fail(exception.Message);
+            }
+        }
+
+        private void HandleGameResult(byte[] payload)
+        {
+            try
+            {
+                GameResultReceived?.Invoke(
+                    GameResultCodec.Decode(payload));
             }
             catch (Exception exception)
             {

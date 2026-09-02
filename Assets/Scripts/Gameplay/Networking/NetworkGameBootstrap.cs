@@ -55,6 +55,13 @@ namespace TopDownRoguelike.Gameplay.Networking
         private uint lastSharedExperienceSequence;
         private ClientWorldSnapshotConsumer clientWorldSnapshotConsumer;
         private NetworkUpgradeCoordinator networkUpgradeCoordinator;
+        private NetworkBossCoordinator networkBossCoordinator;
+        private NetworkClient bossCombatStateClient;
+        private NetworkClient gameResultClient;
+        private GameManager gameResultGameManager;
+        private PlayerHealth clientLocalPlayerHealth;
+        private PlayerHealth hostRemotePlayerHealth;
+        private NetworkClient playerDeathClient;
         private LevelSystem hostUpgradeLevelSystem;
         private NetworkClient upgradeMessageClient;
 
@@ -201,6 +208,9 @@ namespace TopDownRoguelike.Gameplay.Networking
                     networkBehaviour.Client);
 
                 TryConfigureNetworkUpgradeCoordinator();
+                TryConfigureNetworkBossCoordinator(networkBehaviour.Client);
+                ConfigureGameResultSync(networkBehaviour.Client);
+                ConfigurePlayerDeathSync(networkBehaviour.Client);
 
                 if (!TryConfigureHostStatePublisher(
                         localPlayerId,
@@ -244,6 +254,15 @@ namespace TopDownRoguelike.Gameplay.Networking
                 }
 
                 if (enabled &&
+                    !TryConfigureHostBossSpawnPublisher(
+                        networkBehaviour.Client
+                            .SendWorldEntitySpawned))
+                {
+                    FailConfiguration(
+                        "The host Boss spawn publisher could not be configured.");
+                }
+
+                if (enabled &&
                     !TryConfigureHostEnemyDeathPublisher(
                         networkBehaviour.Client
                             .SendWorldEntityRemoved))
@@ -261,6 +280,15 @@ namespace TopDownRoguelike.Gameplay.Networking
                     FailConfiguration(
                         "The host experience orb collection publisher " +
                         "could not be configured.");
+                }
+
+                if (enabled &&
+                    !TryConfigureHostBossDeathPublisher(
+                        networkBehaviour.Client
+                            .SendWorldEntityRemoved))
+                {
+                    FailConfiguration(
+                        "The host Boss death publisher could not be configured.");
                 }
 
                 ConfigureHostSharedExperiencePublisher(
@@ -345,6 +373,9 @@ namespace TopDownRoguelike.Gameplay.Networking
                     hostPlayerId);
 
                 TryConfigureNetworkUpgradeCoordinator();
+                TryConfigureNetworkBossCoordinator(networkBehaviour.Client);
+                ConfigureGameResultSync(networkBehaviour.Client);
+                ConfigurePlayerDeathSync(networkBehaviour.Client);
             }
 
             if (enabled)
@@ -1083,39 +1114,13 @@ namespace TopDownRoguelike.Gameplay.Networking
             uint sequence,
             IReadOnlyList<UpgradeData> options)
         {
-            Debug.Log(
-                $"NetworkGameBootstrap: host upgrade started " +
-                $"sequence={sequence}, options={options?.Count ?? 0}",
-                this);
-
-            if (networkUpgradeCoordinator == null || options == null)
-            {
-                Debug.LogError(
-                    "NetworkGameBootstrap: host upgrade coordinator " +
-                    "or options are missing.",
-                    this);
-                return;
-            }
-
-            if (GameSession.IsHost)
-            {
-                networkUpgradeCoordinator.UpgradeManager
-                    .PresentNetworkOptions(
-                        networkUpgradeCoordinator.CurrentOptions,
-                        HandleHostUpgradeSelected);
-            }
-
             NetworkClientBehaviour networkBehaviour =
                 NetworkClientBehaviour.Instance;
 
             if (networkBehaviour == null ||
                 networkBehaviour.Client == null ||
-                !GameSession.IsHost)
+                options == null)
             {
-                Debug.LogError(
-                    "NetworkGameBootstrap: host network client is " +
-                    "unavailable while broadcasting upgrade.",
-                    this);
                 return;
             }
 
@@ -1130,17 +1135,16 @@ namespace TopDownRoguelike.Gameplay.Networking
                 upgradeIds.Add(option.UpgradeId);
             }
 
-            try
+            networkBehaviour.Client.SendUpgradeStarted(
+                new UpgradeStartedPayload(sequence, upgradeIds));
+
+            if (GameSession.IsHost &&
+                networkUpgradeCoordinator != null)
             {
-                networkBehaviour.Client.SendUpgradeStarted(
-                    new UpgradeStartedPayload(sequence, upgradeIds));
-            }
-            catch (Exception exception)
-            {
-                Debug.LogError(
-                    "NetworkGameBootstrap: failed to broadcast host " +
-                    $"upgrade: {exception.Message}",
-                    this);
+                networkUpgradeCoordinator.UpgradeManager
+                    .PresentNetworkOptions(
+                        networkUpgradeCoordinator.CurrentOptions,
+                        HandleHostUpgradeSelected);
             }
         }
 
@@ -1172,7 +1176,6 @@ namespace TopDownRoguelike.Gameplay.Networking
             if (networkUpgradeCoordinator.AllChoicesSubmitted)
             {
                 networkUpgradeCoordinator.CompleteHostUpgrade();
-                networkUpgradeCoordinator.ResetState();
             }
         }
 
@@ -1192,7 +1195,6 @@ namespace TopDownRoguelike.Gameplay.Networking
                 networkUpgradeCoordinator.AllChoicesSubmitted)
             {
                 networkUpgradeCoordinator.CompleteHostUpgrade();
-                networkUpgradeCoordinator.ResetState();
             }
         }
 
@@ -1200,15 +1202,12 @@ namespace TopDownRoguelike.Gameplay.Networking
             uint playerId,
             UpgradeData upgradeData)
         {
-            if (networkUpgradeCoordinator == null ||
-                registry == null ||
-                !registry.TryGetPlayer(playerId, out GameObject targetPlayer))
+            NetworkClient client = NetworkClientBehaviour.Instance?.Client;
+            if (client != null && playerId == client.PlayerId)
             {
-                return;
+                networkUpgradeCoordinator.UpgradeManager
+                    .ApplyUpgrade(upgradeData);
             }
-
-            networkUpgradeCoordinator.UpgradeManager
-                .ApplyUpgradeToPlayer(targetPlayer, upgradeData);
         }
 
         private void HandleHostUpgradeCompleted(
@@ -1225,7 +1224,6 @@ namespace TopDownRoguelike.Gameplay.Networking
             networkUpgradeCoordinator.UpgradeManager
                 .SetNetworkWaiting(false);
             FindObjectOfType<UpgradePanelView>()?.Hide();
-            networkUpgradeCoordinator.ResetState();
         }
 
         private void SubscribeToClientUpgradeMessages(
@@ -1298,7 +1296,6 @@ namespace TopDownRoguelike.Gameplay.Networking
                 UpgradePanelView panel =
                     FindObjectOfType<UpgradePanelView>();
                 panel?.Hide();
-                networkUpgradeCoordinator.ResetState();
             }
         }
 
@@ -1316,7 +1313,10 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             ExperienceOrbPool pool =
                 FindObjectOfType<ExperienceOrbPool>();
-            if (pool == null)
+            BossEncounterController bossEncounter =
+                FindObjectOfType<BossEncounterController>();
+
+            if (pool == null || bossEncounter == null)
             {
                 return;
             }
@@ -1324,12 +1324,20 @@ namespace TopDownRoguelike.Gameplay.Networking
             clientWorldSnapshotConsumer.ConfigureAuthoritativeHost(hostPlayerId);
                 clientWorldSnapshotConsumer.ConfigureEntityRegistry(entityRegistry);
             clientWorldSnapshotConsumer.ConfigureEntityFactory(
-                record => pool.CreateClientOrb(record));
+                record => record.EntityType == NetworkEntityType.Boss
+                    ? bossEncounter.CreateClientBoss(record)
+                    : pool.CreateClientOrb(record));
             clientWorldSnapshotConsumer.ConfigureEntityRemover(
                 entity =>
                 {
                     if (entity != null)
                     {
+                        if (entity.TryGetComponent(
+                                out BossHealth bossHealth))
+                        {
+                            FindObjectOfType<BossHealthView>()?.Hide();
+                        }
+
                         Destroy(entity);
                     }
                 });
@@ -1340,7 +1348,15 @@ namespace TopDownRoguelike.Gameplay.Networking
             client.WorldEntitySpawnedReceived +=
                 record => clientWorldSnapshotConsumer.EnqueueSpawn(record);
             client.WorldEntityRemovedReceived +=
-                removed => clientWorldSnapshotConsumer.TryRemoveEntity(removed);
+                removed =>
+                {
+                    bool removedSuccessfully =
+                        clientWorldSnapshotConsumer.TryRemoveEntity(removed);
+                    Debug.Log(
+                        $"NetworkGameBootstrap: applied WorldEntityRemoved " +
+                        $"entity={removed.EntityId} type={removed.EntityType} " +
+                        $"success={removedSuccessfully}");
+                };
         }
 
         private void HandleSharedExperienceSnapshot(
@@ -1935,6 +1951,149 @@ namespace TopDownRoguelike.Gameplay.Networking
             return true;
         }
 
+        private void TryConfigureNetworkBossCoordinator(
+            NetworkClient client)
+        {
+            GameManager gameManager = FindObjectOfType<GameManager>();
+            if (gameManager == null || client == null)
+                return;
+
+            networkBossCoordinator =
+                GetComponent<NetworkBossCoordinator>();
+            if (networkBossCoordinator == null)
+                networkBossCoordinator =
+                    gameObject.AddComponent<NetworkBossCoordinator>();
+
+            networkBossCoordinator.Configure(gameManager);
+            bossCombatStateClient = client;
+
+            if (GameSession.IsHost)
+            {
+                networkBossCoordinator.StateBroadcastRequested +=
+                    HandleHostBossCombatStateBroadcast;
+            }
+            else
+            {
+                client.BossCombatStateReceived +=
+                    HandleClientBossCombatState;
+            }
+        }
+
+        private void HandleHostBossCombatStateBroadcast(
+            NetworkBossCombatState state)
+        {
+            if (bossCombatStateClient == null)
+                return;
+
+            bossCombatStateClient.SendBossCombatState(
+                new BossCombatStatePayload(
+                    (BossCombatState)(byte)state));
+        }
+
+        private void HandleClientBossCombatState(
+            BossCombatStatePayload payload)
+        {
+            if (networkBossCoordinator == null || payload == null)
+                return;
+
+            networkBossCoordinator.ApplyRemoteState(
+                (NetworkBossCombatState)(byte)payload.State);
+        }
+
+        private void ConfigureGameResultSync(NetworkClient client)
+        {
+            gameResultGameManager = FindObjectOfType<GameManager>();
+            if (gameResultGameManager == null || client == null)
+                return;
+            gameResultClient = client;
+            if (GameSession.IsHost)
+                gameResultGameManager.OnStateChanged += HandleHostResultState;
+            else
+                client.GameResultReceived += HandleClientGameResult;
+        }
+
+        private void HandleHostResultState(GameState state)
+        {
+            if (gameResultClient == null ||
+                (state != GameState.Victory && state != GameState.Defeat))
+                return;
+            gameResultClient.SendGameResult(
+                new GameResultPayload(
+                    state == GameState.Victory
+                        ? GameResult.Victory
+                        : GameResult.Defeat));
+        }
+
+        private void HandleClientGameResult(GameResultPayload payload)
+        {
+            if (gameResultGameManager == null || payload == null)
+                return;
+            if (payload.Result == GameResult.Victory)
+                gameResultGameManager.NotifyVictory();
+            else
+                gameResultGameManager.NotifyDefeat();
+        }
+
+        private void ConfigurePlayerDeathSync(NetworkClient client)
+        {
+            if (client == null)
+                return;
+            playerDeathClient = client;
+            if (GameSession.IsClient && localPlayer != null &&
+                localPlayer.TryGetComponent(out clientLocalPlayerHealth))
+            {
+                clientLocalPlayerHealth.OnDied += HandleClientPlayerDied;
+            }
+            else if (GameSession.IsHost)
+            {
+                client.PlayerDiedReceived += HandleRemotePlayerDied;
+                if (remotePlayer != null &&
+                    remotePlayer.TryGetComponent(out hostRemotePlayerHealth))
+                {
+                    hostRemotePlayerHealth.OnDied += HandleRemotePlayerDied;
+                }
+            }
+        }
+
+        private void HandleClientPlayerDied()
+        {
+            playerDeathClient?.SendPlayerDied();
+        }
+
+        private void HandleRemotePlayerDied()
+        {
+            gameResultGameManager?.NotifyDefeat();
+        }
+
+        private bool TryConfigureHostBossSpawnPublisher(
+            Action<WorldEntityRecord> sendSpawn)
+        {
+            if (!GameSession.IsHost || sendSpawn == null)
+            {
+                return false;
+            }
+
+            BossEncounterController encounter =
+                FindObjectOfType<BossEncounterController>();
+
+            if (encounter == null)
+            {
+                return false;
+            }
+
+            HostBossSpawnPublisher publisher =
+                GetComponent<HostBossSpawnPublisher>();
+
+            if (publisher == null)
+            {
+                publisher =
+                    gameObject.AddComponent<HostBossSpawnPublisher>();
+            }
+
+            publisher.Configure(encounter, sendSpawn);
+            return true;
+        }
+
         private bool TryConfigureHostEnemyDeathPublisher(
             Action<WorldEntityRemovedPayload> sendRemoval)
         {
@@ -1991,6 +2150,35 @@ namespace TopDownRoguelike.Gameplay.Networking
             }
 
             publisher.Configure(orbPool, sendRemoval);
+            return true;
+        }
+
+        private bool TryConfigureHostBossDeathPublisher(
+            Action<WorldEntityRemovedPayload> sendRemoval)
+        {
+            if (!GameSession.IsHost || sendRemoval == null)
+            {
+                return false;
+            }
+
+            BossEncounterController encounter =
+                FindObjectOfType<BossEncounterController>();
+
+            if (encounter == null)
+            {
+                return false;
+            }
+
+            HostBossDeathPublisher publisher =
+                GetComponent<HostBossDeathPublisher>();
+
+            if (publisher == null)
+            {
+                publisher =
+                    gameObject.AddComponent<HostBossDeathPublisher>();
+            }
+
+            publisher.Configure(encounter, sendRemoval);
             return true;
         }
 
@@ -2355,6 +2543,52 @@ namespace TopDownRoguelike.Gameplay.Networking
                     HandleHostUpgradeApplied;
                 networkUpgradeCoordinator.UpgradeCompleted -=
                     HandleHostUpgradeCompleted;
+            }
+
+            if (networkBossCoordinator != null)
+            {
+                networkBossCoordinator.StateBroadcastRequested -=
+                    HandleHostBossCombatStateBroadcast;
+            }
+
+            if (bossCombatStateClient != null)
+            {
+                bossCombatStateClient.BossCombatStateReceived -=
+                    HandleClientBossCombatState;
+                bossCombatStateClient = null;
+            }
+
+            if (gameResultGameManager != null)
+            {
+                gameResultGameManager.OnStateChanged -=
+                    HandleHostResultState;
+                gameResultGameManager = null;
+            }
+
+            if (gameResultClient != null)
+            {
+                gameResultClient.GameResultReceived -=
+                    HandleClientGameResult;
+                gameResultClient = null;
+            }
+
+            if (clientLocalPlayerHealth != null)
+            {
+                clientLocalPlayerHealth.OnDied -= HandleClientPlayerDied;
+                clientLocalPlayerHealth = null;
+            }
+
+
+            if (hostRemotePlayerHealth != null)
+            {
+                hostRemotePlayerHealth.OnDied -= HandleRemotePlayerDied;
+                hostRemotePlayerHealth = null;
+            }
+
+            if (playerDeathClient != null)
+            {
+                playerDeathClient.PlayerDiedReceived -= HandleRemotePlayerDied;
+                playerDeathClient = null;
             }
 
             if (stateSnapshotClient != null)

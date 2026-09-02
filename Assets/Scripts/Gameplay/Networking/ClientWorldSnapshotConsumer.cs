@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using TopDownRoguelike.Gameplay.Experience;
 using TopDownRoguelike.Gameplay.Enemies;
+using TopDownRoguelike.Gameplay.Bosses;
 using TopDownRoguelike.Networking.Gameplay;
 using TopDownRoguelike.Networking.Protocol;
 using UnityEngine;
@@ -161,10 +162,9 @@ namespace TopDownRoguelike.Gameplay.Networking
         {
             if (record == null ||
                 record.EntityId == 0u ||
-                (record.EntityType !=
-                    NetworkEntityType.Enemy &&
-                 record.EntityType !=
-                    NetworkEntityType.ExperienceOrb) ||
+                (record.EntityType != NetworkEntityType.Enemy &&
+                 record.EntityType != NetworkEntityType.Boss &&
+                 record.EntityType != NetworkEntityType.ExperienceOrb) ||
                 record.Lifecycle !=
                     WorldEntityLifecycle.Spawn ||
                 (record.Flags &
@@ -184,6 +184,8 @@ namespace TopDownRoguelike.Gameplay.Networking
                 removed.EntityId == 0u ||
                 !IsSupportedEntityType(removed.EntityType) ||
                 (removed.EntityType == NetworkEntityType.Enemy &&
+                 removed.Reason != WorldEntityRemovalReason.Died) ||
+                (removed.EntityType == NetworkEntityType.Boss &&
                  removed.Reason != WorldEntityRemovalReason.Died) ||
                 (removed.EntityType == NetworkEntityType.ExperienceOrb &&
                  removed.Reason != WorldEntityRemovalReason.Despawned))
@@ -434,6 +436,8 @@ namespace TopDownRoguelike.Gameplay.Networking
                 !IsSupportedEntityType(removed.EntityType) ||
                 (removed.EntityType == NetworkEntityType.Enemy &&
                  removed.Reason != WorldEntityRemovalReason.Died) ||
+                (removed.EntityType == NetworkEntityType.Boss &&
+                 removed.Reason != WorldEntityRemovalReason.Died) ||
                 (removed.EntityType == NetworkEntityType.ExperienceOrb &&
                  removed.Reason != WorldEntityRemovalReason.Despawned))
             {
@@ -501,6 +505,34 @@ namespace TopDownRoguelike.Gameplay.Networking
             }
 
             if (record.EntityType == NetworkEntityType.Enemy &&
+                record.IsDead)
+            {
+                return RemoveRegisteredEntity(
+                    record.EntityId,
+                    record.EntityType);
+            }
+
+            if (record.EntityType == NetworkEntityType.Boss &&
+                entityObject.TryGetComponent(
+                    out BossHealth bossHealth) &&
+                !bossHealth.ApplyAuthoritativeState(
+                    record.CurrentHealth,
+                    record.MaxHealth,
+                    record.IsDead))
+            {
+                return false;
+            }
+
+            if (record.EntityType == NetworkEntityType.Boss &&
+                entityObject.TryGetComponent(
+                    out BossController bossController) &&
+                !bossController.ApplyAuthoritativePhase(
+                    record.BossPhase))
+            {
+                return false;
+            }
+
+            if (record.EntityType == NetworkEntityType.Boss &&
                 record.IsDead)
             {
                 return RemoveRegisteredEntity(

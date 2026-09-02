@@ -77,6 +77,12 @@ namespace TopDownRoguelike.Gameplay.UI
             gameObject.SetActive(false);
         }
 
+        public void Hide()
+        {
+            Unbind();
+            gameObject.SetActive(false);
+        }
+
         private void Refresh(
             int currentHealth,
             int maxHealth)

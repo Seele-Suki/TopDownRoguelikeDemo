@@ -94,6 +94,21 @@ namespace TopDownRoguelike.Gameplay.Core
         public void StartBossBattle() =>
             ChangeState(GameState.BossBattle);
 
+        public void ApplyNetworkBossStarted()
+        {
+            StartBossBattle();
+        }
+
+        public void ApplyNetworkBossPaused()
+        {
+            PauseGame();
+        }
+
+        public void ApplyNetworkBossResumed()
+        {
+            ResumeGame();
+        }
+
         public void NotifyVictory() =>
             ChangeState(GameState.Victory);
 

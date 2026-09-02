@@ -48,6 +48,8 @@ add_executable(NetworkServer
     src/net/WorldEntitySpawnForwarder.cpp
     src/net/WorldEntityRemovalForwarder.h
     src/net/WorldEntityRemovalForwarder.cpp
+    src/net/SharedExperienceForwarder.h
+    src/net/SharedExperienceForwarder.cpp
 
     src/protocol/MessageType.h
     src/protocol/MessageHeader.h
@@ -533,6 +535,8 @@ add_executable(ServerLoopTests
     src/net/WorldEntitySpawnForwarder.cpp
     src/net/WorldEntityRemovalForwarder.h
     src/net/WorldEntityRemovalForwarder.cpp
+    src/net/SharedExperienceForwarder.h
+    src/net/SharedExperienceForwarder.cpp
 
     src/room/ClientState.h
     src/room/ClientState.cpp

@@ -6,6 +6,7 @@ using TopDownRoguelike.Networking.Gameplay;
 using TopDownRoguelike.Networking.Protocol;
 using UnityEngine;
 using TopDownRoguelike.Gameplay.Characters;
+using TopDownRoguelike.Gameplay.Experience;
 
 namespace TopDownRoguelike.Gameplay.Networking
 {
@@ -18,6 +19,7 @@ namespace TopDownRoguelike.Gameplay.Networking
         private NetworkPlayerRegistry playerRegistry;
         private EnemySpawner enemySpawner;
         private BossEncounterController bossEncounterController;
+        private ExperienceOrbPool experienceOrbPool;
         private Action<WorldStateSnapshotPayload> sendSnapshot;
         private float elapsedSeconds;
 
@@ -41,6 +43,9 @@ namespace TopDownRoguelike.Gameplay.Networking
                 newBossEncounterController ??
                 throw new ArgumentNullException(
                     nameof(newBossEncounterController));
+
+            experienceOrbPool =
+                UnityEngine.Object.FindObjectOfType<ExperienceOrbPool>();
 
             enabled = true;
         }
@@ -156,6 +161,7 @@ namespace TopDownRoguelike.Gameplay.Networking
                 byte bossPhase = 0;
                 NetworkEnemyArchetype enemyArchetype =
                     NetworkEnemyArchetype.Invalid;
+                ushort experienceAmount = 0;
 
                 if (identifier.EntityType ==
                     NetworkEntityType.Player)
@@ -207,6 +213,21 @@ namespace TopDownRoguelike.Gameplay.Networking
                         flags |= WorldEntityFlags.Dead;
                     }
                 }
+                else if (identifier.EntityType ==
+                    NetworkEntityType.ExperienceOrb &&
+                    identifier.TryGetComponent(
+                        out ExperienceOrb orb))
+                {
+                    if (orb.ExperienceAmount <= 0 ||
+                        orb.ExperienceAmount > ushort.MaxValue)
+                    {
+                        throw new InvalidOperationException(
+                            "Experience orb amount is outside the network range.");
+                    }
+
+                    experienceAmount =
+                        (ushort)orb.ExperienceAmount;
+                }
 
                 records.Add(
                     new WorldEntityRecord(
@@ -220,7 +241,8 @@ namespace TopDownRoguelike.Gameplay.Networking
                         currentHealth,
                         maxHealth,
                         bossPhase,
-                        enemyArchetype));
+                        enemyArchetype,
+                        experienceAmount));
             }
 
             return new WorldStateSnapshotPayload(records);
@@ -292,6 +314,18 @@ namespace TopDownRoguelike.Gameplay.Networking
                     identifiers,
                     boss,
                     NetworkEntityType.Boss);
+            }
+
+            if (experienceOrbPool != null)
+            {
+                foreach (ExperienceOrb orb in
+                    experienceOrbPool.EnumerateActiveOrbs())
+                {
+                    AddIdentifier(
+                        identifiers,
+                        orb != null ? orb.gameObject : null,
+                        NetworkEntityType.ExperienceOrb);
+                }
             }
 
             return identifiers;

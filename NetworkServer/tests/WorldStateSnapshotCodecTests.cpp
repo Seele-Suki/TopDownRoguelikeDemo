@@ -198,7 +198,7 @@ namespace
             "Enemy archetype is not at record offset 25."
         );
 
-        for (std::size_t offset = 26U;
+        for (std::size_t offset = 28U;
             offset < kWorldEntityRecordSize;
             ++offset)
         {
@@ -221,6 +221,33 @@ namespace
             "Enemy archetype did not round-trip."
         );
     }
+
+    void WorldStateSnapshotPreservesExperienceOrbAmount()
+    {
+        using namespace tdr::protocol;
+
+        WorldEntityRecord orb{};
+        orb.entityId = 0x40000001U;
+        orb.entityType = WorldEntityType::ExperienceOrb;
+        orb.lifecycle = WorldEntityLifecycle::Spawn;
+        orb.flags = WorldEntityFlags::Active;
+        orb.experienceAmount = 17U;
+
+        WorldStateSnapshotPayload snapshot{};
+        snapshot.entities.push_back(orb);
+
+        const auto encoded =
+            WorldStateSnapshotCodec::Encode(snapshot);
+        const auto decoded =
+            WorldStateSnapshotCodec::Decode(
+                encoded.data(),
+                encoded.size());
+
+        Require(
+            decoded.entities[0].experienceAmount == 17U,
+            "Experience orb amount did not round-trip."
+        );
+    }
 }
 
 int main()
@@ -231,6 +258,7 @@ int main()
         WorldStateSnapshotRoundTripsMultipleEntities();
         WorldStateSnapshotRejectsInvalidHealth();
         WorldStateSnapshotPreservesEnemyArchetype();
+        WorldStateSnapshotPreservesExperienceOrbAmount();
         std::cout << "WorldStateSnapshotCodec tests passed.\n";
         return 0;
     }

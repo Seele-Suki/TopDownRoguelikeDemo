@@ -55,7 +55,8 @@ namespace tdr::net
 
         [[nodiscard]]
         std::vector<std::vector<std::uint8_t>>
-            TakeWorldEntityRemovalPayloads();
+        TakeWorldEntityRemovalPayloads();
+        std::vector<std::vector<std::uint8_t>> TakeSharedExperiencePayloads();
 
         void LeaveRoom();
 
@@ -172,6 +173,7 @@ namespace tdr::net
             worldEntitySpawnPayloads_;
 
         std::vector<std::vector<std::uint8_t>>
-            worldEntityRemovalPayloads_;
+        worldEntityRemovalPayloads_;
+        std::vector<std::vector<std::uint8_t>> sharedExperiencePayloads_;
     };
 }

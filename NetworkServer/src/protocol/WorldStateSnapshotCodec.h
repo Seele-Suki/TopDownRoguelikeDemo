@@ -62,6 +62,7 @@ namespace tdr::protocol
         std::uint8_t bossPhase = 0U;
         NetworkEnemyArchetype enemyArchetype =
             NetworkEnemyArchetype::Invalid;
+        std::uint16_t experienceAmount = 0U;
     };
 
     struct WorldStateSnapshotPayload final

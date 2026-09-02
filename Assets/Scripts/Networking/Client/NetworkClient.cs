@@ -111,6 +111,9 @@ namespace TopDownRoguelike.Networking.Client
         public event Action<WorldEntityRemovedPayload>
             WorldEntityRemovedReceived;
 
+        public event Action<SharedExperienceSnapshotPayload>
+            SharedExperienceSnapshotReceived;
+
         public event Action<
             uint,
             PlayerShotEvent>
@@ -646,6 +649,29 @@ namespace TopDownRoguelike.Networking.Client
             }
         }
 
+        public void SendSharedExperienceSnapshot(
+            SharedExperienceSnapshotPayload snapshot)
+        {
+            ThrowIfDisposed();
+            if (State != NetworkClientState.InRoom ||
+                !GameSession.IsHost)
+            {
+                throw new InvalidOperationException(
+                    "Only the room host can send shared experience state.");
+            }
+
+            try
+            {
+                tcpTransport.Send(
+                    MessageType.SharedExperienceSnapshot,
+                    SharedExperienceSnapshotCodec.Encode(snapshot));
+            }
+            catch (Exception exception)
+            {
+                Fail(exception.Message);
+            }
+        }
+
         public void SendPlayerShotEvent(
             PlayerShotEvent shotEvent)
         {
@@ -991,6 +1017,17 @@ namespace TopDownRoguelike.Networking.Client
             }
 
             if (transportEvent.TransportKind ==
+                NetworkTransportKind.Tcp &&
+                transportEvent.PacketType ==
+                MessageType.SharedExperienceSnapshot &&
+                State == NetworkClientState.InRoom)
+            {
+                HandleSharedExperienceSnapshot(
+                    transportEvent.Payload);
+                return;
+            }
+
+            if (transportEvent.TransportKind ==
                 NetworkTransportKind.Udp &&
                 transportEvent.PacketType ==
                 MessageType.WorldStateSnapshot &&
@@ -1329,6 +1366,19 @@ namespace TopDownRoguelike.Networking.Client
                     WorldEntityRemovedCodec.Decode(payload);
 
                 WorldEntityRemovedReceived?.Invoke(removed);
+            }
+            catch (Exception exception)
+            {
+                Fail(exception.Message);
+            }
+        }
+
+        private void HandleSharedExperienceSnapshot(byte[] payload)
+        {
+            try
+            {
+                SharedExperienceSnapshotReceived?.Invoke(
+                    SharedExperienceSnapshotCodec.Decode(payload));
             }
             catch (Exception exception)
             {

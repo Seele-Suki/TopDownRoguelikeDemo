@@ -34,7 +34,8 @@ namespace TopDownRoguelike.Networking.Protocol
             ushort maxHealth,
             byte bossPhase = 0,
             NetworkEnemyArchetype enemyArchetype =
-                NetworkEnemyArchetype.Invalid)
+                NetworkEnemyArchetype.Invalid,
+            ushort experienceAmount = 0)
         {
             EntityId = entityId;
             EntityType = entityType;
@@ -47,6 +48,7 @@ namespace TopDownRoguelike.Networking.Protocol
             MaxHealth = maxHealth;
             BossPhase = bossPhase;
             EnemyArchetype = enemyArchetype;
+            ExperienceAmount = experienceAmount;
         }
 
         public uint EntityId { get; }
@@ -62,6 +64,7 @@ namespace TopDownRoguelike.Networking.Protocol
         public ushort MaxHealth { get; }
         public byte BossPhase { get; }
         public NetworkEnemyArchetype EnemyArchetype { get; }
+        public ushort ExperienceAmount { get; }
     }
 
     public sealed class WorldStateSnapshotPayload
@@ -191,6 +194,11 @@ namespace TopDownRoguelike.Networking.Protocol
                 payload[offset + 25] =
                     (byte)entity.EnemyArchetype;
 
+                PacketCodec.WriteNetworkUInt16(
+                    payload,
+                    offset + 26,
+                    entity.ExperienceAmount);
+
                 offset += RecordSize;
             }
 
@@ -291,9 +299,14 @@ namespace TopDownRoguelike.Networking.Protocol
 
                 NetworkEnemyArchetype enemyArchetype =
                     (NetworkEnemyArchetype)
-                    payload[offset + 25];
+                     payload[offset + 25];
 
-                for (int reservedOffset = 26;
+                ushort experienceAmount =
+                    PacketCodec.ReadNetworkUInt16(
+                        payload,
+                        offset + 26);
+
+                for (int reservedOffset = 28;
                     reservedOffset < RecordSize;
                     reservedOffset++)
                 {
@@ -317,7 +330,8 @@ namespace TopDownRoguelike.Networking.Protocol
                         currentHealth,
                         maxHealth,
                         bossPhase,
-                        enemyArchetype));
+                        enemyArchetype,
+                        experienceAmount));
 
                 offset += RecordSize;
             }
@@ -410,9 +424,20 @@ namespace TopDownRoguelike.Networking.Protocol
                         throw new ArgumentException(
                             "Experience orb contains combat state.");
                     }
+
+                    if (entity.ExperienceAmount == 0)
+                    {
+                        throw new ArgumentException(
+                            "Experience orb amount must be positive.");
+                    }
                 }
                 else
                 {
+                    if (entity.ExperienceAmount != 0)
+                    {
+                        throw new ArgumentException(
+                            "Non-orb entity contains experience amount.");
+                    }
                     if (entity.MaxHealth == 0 ||
                         entity.CurrentHealth > entity.MaxHealth)
                     {

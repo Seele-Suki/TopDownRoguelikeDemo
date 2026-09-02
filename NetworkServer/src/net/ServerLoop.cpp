@@ -5,6 +5,7 @@
 #include "net/TcpListener.h"
 #include "net/UdpSocket.h"
 #include "net/WorldEntitySpawnForwarder.h"
+#include "net/SharedExperienceForwarder.h"
 #include "net/WorldEntityRemovalForwarder.h"
 #include "protocol/UdpBindingCredentialsCodec.h"
 #include "protocol/UdpPacketCodec.h"
@@ -15,6 +16,7 @@
 #include <cstdint>
 #include <vector>
 #include <iostream>
+#include <cstring>
 
 namespace tdr::net
 {
@@ -434,6 +436,26 @@ namespace tdr::net
                         session.PlayerId(),
                         tdr::protocol::MessageType::ErrorMessage,
                         errorPayload);
+                }
+            }
+
+            const auto sharedPayloads = session.TakeSharedExperiencePayloads();
+            for (const auto& sharedPayload : sharedPayloads)
+            {
+                try
+                {
+                    const auto forwarded = SharedExperienceForwarder::Forward(session, sharedPayload);
+                    coordinator_.SendPacketToPlayer(
+                        forwarded.targetPlayerId,
+                        tdr::protocol::MessageType::SharedExperienceSnapshot,
+                        forwarded.payload);
+                }
+                catch (const std::exception& exception)
+                {
+                    const std::vector<std::uint8_t> errorPayload(
+                        exception.what(), exception.what() + std::strlen(exception.what()));
+                    coordinator_.SendPacketToPlayer(
+                        session.PlayerId(), tdr::protocol::MessageType::ErrorMessage, errorPayload);
                 }
             }
 

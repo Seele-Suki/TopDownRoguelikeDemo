@@ -1,0 +1,5 @@
+#include "net/SharedExperienceForwarder.h"
+#include "net/TcpClientSession.h"
+#include "protocol/PacketCodec.h"
+#include <stdexcept>
+namespace tdr::net { ForwardedSharedExperience SharedExperienceForwarder::Forward(const TcpClientSession& sender,const std::vector<std::uint8_t>& payload){ if(!sender.HasRoom()) throw std::runtime_error("Shared experience sender is not in a room."); const auto& room=sender.CurrentRoom(); if(room.Status()!=tdr::room::RoomStatus::Started) throw std::runtime_error("Shared experience cannot be forwarded before the room starts."); if(sender.PlayerId()!=room.HostPlayerId()) throw std::invalid_argument("Only the room host can send shared experience."); if(payload.size()!=16U) throw std::invalid_argument("Shared experience payload must be 16 bytes."); std::uint32_t guest=0U; for(std::size_t i=0;i<room.PlayerCount();++i){ auto id=room.PlayerAt(i).playerId; if(id!=room.HostPlayerId()){guest=id;break;}} if(guest==0U) throw std::runtime_error("The room has no guest player."); return {guest,payload}; } }

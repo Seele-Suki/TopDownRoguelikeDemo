@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
+using TopDownRoguelike.Gameplay.Experience;
 using TopDownRoguelike.Gameplay.Enemies;
 using TopDownRoguelike.Networking.Gameplay;
 using TopDownRoguelike.Networking.Protocol;
@@ -160,8 +161,10 @@ namespace TopDownRoguelike.Gameplay.Networking
         {
             if (record == null ||
                 record.EntityId == 0u ||
-                record.EntityType !=
-                    NetworkEntityType.Enemy ||
+                (record.EntityType !=
+                    NetworkEntityType.Enemy &&
+                 record.EntityType !=
+                    NetworkEntityType.ExperienceOrb) ||
                 record.Lifecycle !=
                     WorldEntityLifecycle.Spawn ||
                 (record.Flags &
@@ -179,8 +182,11 @@ namespace TopDownRoguelike.Gameplay.Networking
         {
             if (removed == null ||
                 removed.EntityId == 0u ||
-                removed.EntityType != NetworkEntityType.Enemy ||
-                removed.Reason != WorldEntityRemovalReason.Died)
+                !IsSupportedEntityType(removed.EntityType) ||
+                (removed.EntityType == NetworkEntityType.Enemy &&
+                 removed.Reason != WorldEntityRemovalReason.Died) ||
+                (removed.EntityType == NetworkEntityType.ExperienceOrb &&
+                 removed.Reason != WorldEntityRemovalReason.Despawned))
             {
                 return false;
             }
@@ -238,8 +244,7 @@ namespace TopDownRoguelike.Gameplay.Networking
             if (!IsUnityMainThread() ||
                 entityRegistry == null ||
                 record == null ||
-                record.EntityType !=
-                    NetworkEntityType.Enemy ||
+                !IsSupportedEntityType(record.EntityType) ||
                 record.Lifecycle !=
                     WorldEntityLifecycle.Spawn)
             {
@@ -307,12 +312,20 @@ namespace TopDownRoguelike.Gameplay.Networking
                 return true;
             }
 
+            var seenExperienceOrbIds = new HashSet<uint>();
+
             foreach (WorldEntityRecord record
                 in snapshot.Entities)
             {
                 if (record == null)
                 {
                     continue;
+                }
+
+                if (record.EntityType == NetworkEntityType.ExperienceOrb &&
+                    record.Lifecycle != WorldEntityLifecycle.Removed)
+                {
+                    seenExperienceOrbIds.Add(record.EntityId);
                 }
 
                 if (record.Lifecycle ==
@@ -369,6 +382,25 @@ namespace TopDownRoguelike.Gameplay.Networking
                 }
             }
 
+            var staleExperienceOrbIds = new List<uint>();
+            foreach (NetworkEntityId identifier in
+                entityRegistry.EnumerateEntities())
+            {
+                if (identifier != null &&
+                    identifier.EntityType == NetworkEntityType.ExperienceOrb &&
+                    !seenExperienceOrbIds.Contains(identifier.EntityId))
+                {
+                    staleExperienceOrbIds.Add(identifier.EntityId);
+                }
+            }
+
+            foreach (uint staleId in staleExperienceOrbIds)
+            {
+                RemoveRegisteredEntity(
+                    staleId,
+                    NetworkEntityType.ExperienceOrb);
+            }
+
             return true;
         }
 
@@ -399,8 +431,11 @@ namespace TopDownRoguelike.Gameplay.Networking
                 entityRegistry == null ||
                 removed == null ||
                 removed.EntityId == 0u ||
-                removed.EntityType != NetworkEntityType.Enemy ||
-                removed.Reason != WorldEntityRemovalReason.Died)
+                !IsSupportedEntityType(removed.EntityType) ||
+                (removed.EntityType == NetworkEntityType.Enemy &&
+                 removed.Reason != WorldEntityRemovalReason.Died) ||
+                (removed.EntityType == NetworkEntityType.ExperienceOrb &&
+                 removed.Reason != WorldEntityRemovalReason.Despawned))
             {
                 return false;
             }
@@ -471,6 +506,14 @@ namespace TopDownRoguelike.Gameplay.Networking
                 return RemoveRegisteredEntity(
                     record.EntityId,
                     record.EntityType);
+            }
+
+            if (record.EntityType ==
+                NetworkEntityType.ExperienceOrb &&
+                entityObject.TryGetComponent(
+                    out ExperienceOrb orb))
+            {
+                orb.Initialize(record.ExperienceAmount);
             }
 
             bool shouldBeActive =

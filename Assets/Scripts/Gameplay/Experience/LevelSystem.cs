@@ -20,6 +20,44 @@ namespace TopDownRoguelike.Gameplay.Experience
         public int CurrentExperience => currentExperience;
         public int ExperienceToNextLevel => experienceToNextLevel;
 
+        public void ApplyAuthoritativeState(
+            int level,
+            int experience,
+            int experienceToNext)
+        {
+            if (level < 1 ||
+                experience < 0 ||
+                experienceToNext <= 0 ||
+                experience >= experienceToNext)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(level),
+                    "Authoritative level state is invalid.");
+            }
+
+            bool levelChanged = currentLevel != level;
+            bool experienceChanged =
+                currentExperience != experience ||
+                experienceToNextLevel != experienceToNext;
+
+            currentLevel = level;
+            currentExperience = experience;
+            experienceToNextLevel = experienceToNext;
+
+            if (levelChanged)
+            {
+                OnLevelChanged?.Invoke(currentLevel);
+                OnLevelUp?.Invoke(currentLevel);
+            }
+
+            if (experienceChanged)
+            {
+                OnExperienceChanged?.Invoke(
+                    currentExperience,
+                    experienceToNextLevel);
+            }
+        }
+
         private void Start()
         {
             OnLevelChanged?.Invoke(currentLevel);

@@ -2,6 +2,7 @@ using System;
 using TopDownRoguelike.Gameplay.Bosses;
 using TopDownRoguelike.Gameplay.Characters;
 using TopDownRoguelike.Gameplay.Enemies;
+using TopDownRoguelike.Gameplay.Experience;
 using TopDownRoguelike.Gameplay.Weapons;
 using TopDownRoguelike.Gameplay.UI;
 using TopDownRoguelike.Infrastructure;
@@ -41,12 +42,15 @@ namespace TopDownRoguelike.Gameplay.Networking
         private HealthBarView healthBarView;
 
         private NetworkPlayerRegistry registry;
+        private NetworkEntityRegistry entityRegistry;
         private GameObject localPlayer;
         private GameObject remotePlayer;
         private NetworkClient remoteInputClient;
         private NetworkClient stateSnapshotClient;
         private NetworkClient shotEventClient;
         private NetworkClient shotgunEventClient;
+        private uint lastSharedExperienceSequence;
+        private ClientWorldSnapshotConsumer clientWorldSnapshotConsumer;
 
         public NetworkPlayerRegistry Registry =>
             registry;
@@ -71,6 +75,8 @@ namespace TopDownRoguelike.Gameplay.Networking
         {
             registry =
                 new NetworkPlayerRegistry();
+            entityRegistry =
+                new NetworkEntityRegistry();
         }
 
         private void Start()
@@ -143,10 +149,13 @@ namespace TopDownRoguelike.Gameplay.Networking
             }
 
             localPlayer = scenePlayer;
+            RegisterEntity(scenePlayer);
         }
 
         private void ConfigureMultiplayerHost()
         {
+            EnsureSharedExperienceState();
+
             NetworkClientBehaviour networkBehaviour =
                 NetworkClientBehaviour.Instance;
 
@@ -211,8 +220,18 @@ namespace TopDownRoguelike.Gameplay.Networking
                         networkBehaviour.Client
                             .SendWorldEntitySpawned))
                 {
+                        FailConfiguration(
+                            "The host enemy spawn publisher " +
+                            "could not be configured.");
+                }
+
+                if (enabled &&
+                    !TryConfigureHostExperienceOrbSpawnPublisher(
+                        networkBehaviour.Client
+                            .SendWorldEntitySpawned))
+                {
                     FailConfiguration(
-                        "The host enemy spawn publisher " +
+                        "The host experience orb spawn publisher " +
                         "could not be configured.");
                 }
 
@@ -222,9 +241,22 @@ namespace TopDownRoguelike.Gameplay.Networking
                             .SendWorldEntityRemoved))
                 {
                     FailConfiguration(
-                        "The host enemy death publisher " +
+                            "The host enemy death publisher " +
+                            "could not be configured.");
+                }
+
+                if (enabled &&
+                    !TryConfigureHostExperienceOrbCollectionPublisher(
+                        networkBehaviour.Client
+                            .SendWorldEntityRemoved))
+                {
+                    FailConfiguration(
+                        "The host experience orb collection publisher " +
                         "could not be configured.");
                 }
+
+                ConfigureHostSharedExperiencePublisher(
+                    networkBehaviour.Client.SendSharedExperienceSnapshot);
 
                 if (enabled &&
                     !TryConfigureHostShotPublisher(
@@ -253,6 +285,8 @@ namespace TopDownRoguelike.Gameplay.Networking
 
         private void ConfigureMultiplayerClient()
         {
+            EnsureSharedExperienceState();
+
             NetworkClientBehaviour networkBehaviour =
                 NetworkClientBehaviour.Instance;
 
@@ -296,6 +330,13 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             if (enabled)
             {
+                ConfigureClientWorldSnapshotConsumer(
+                    networkBehaviour.Client,
+                    hostPlayerId);
+            }
+
+            if (enabled)
+            {
                 SubscribeToRemoteStateSnapshots(
                     networkBehaviour.Client);
 
@@ -304,6 +345,9 @@ namespace TopDownRoguelike.Gameplay.Networking
 
                 SubscribeToRemoteShotgunEvents(
                     networkBehaviour.Client);
+
+                networkBehaviour.Client.SharedExperienceSnapshotReceived +=
+                    HandleSharedExperienceSnapshot;
             }
 
             if (enabled &&
@@ -413,6 +457,8 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             localPlayer = scenePlayer;
             remotePlayer = createdRemotePlayer;
+            RegisterEntity(scenePlayer);
+            RegisterEntity(createdRemotePlayer);
         }
 
         private void ConfigureClientPlayers(
@@ -635,6 +681,8 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             localPlayer = scenePlayer;
             remotePlayer = createdRemotePlayer;
+            RegisterEntity(scenePlayer);
+            RegisterEntity(createdRemotePlayer);
         }
 
         private static bool TryResolveHostPlayerIds(
@@ -931,6 +979,140 @@ namespace TopDownRoguelike.Gameplay.Networking
             PlayerStateSnapshotReceived?.Invoke(
                 senderPlayerId,
                 snapshot);
+        }
+
+        private void EnsureSharedExperienceState()
+        {
+            if (GetComponent<SharedExperienceState>() == null)
+            {
+                gameObject.AddComponent<SharedExperienceState>();
+            }
+        }
+
+        private void RegisterEntity(GameObject player)
+        {
+            if (entityRegistry != null && player != null &&
+                player.TryGetComponent(out NetworkEntityId identifier))
+            {
+                entityRegistry.TryRegister(identifier);
+            }
+        }
+
+        private void ConfigureClientWorldSnapshotConsumer(
+            NetworkClient client,
+            uint hostPlayerId)
+        {
+            clientWorldSnapshotConsumer =
+                GetComponent<ClientWorldSnapshotConsumer>();
+            if (clientWorldSnapshotConsumer == null)
+            {
+                clientWorldSnapshotConsumer =
+                    gameObject.AddComponent<ClientWorldSnapshotConsumer>();
+            }
+
+            ExperienceOrbPool pool =
+                FindObjectOfType<ExperienceOrbPool>();
+            if (pool == null)
+            {
+                return;
+            }
+
+            clientWorldSnapshotConsumer.ConfigureAuthoritativeHost(hostPlayerId);
+                clientWorldSnapshotConsumer.ConfigureEntityRegistry(entityRegistry);
+            clientWorldSnapshotConsumer.ConfigureEntityFactory(
+                record => pool.CreateClientOrb(record));
+            clientWorldSnapshotConsumer.ConfigureEntityRemover(
+                entity =>
+                {
+                    if (entity != null)
+                    {
+                        Destroy(entity);
+                    }
+                });
+            client.WorldStateSnapshotReceived +=
+                (sender, sequence, snapshot) =>
+                    clientWorldSnapshotConsumer.EnqueueSnapshot(
+                        sender, sequence, snapshot);
+            client.WorldEntitySpawnedReceived +=
+                record => clientWorldSnapshotConsumer.EnqueueSpawn(record);
+            client.WorldEntityRemovedReceived +=
+                removed => clientWorldSnapshotConsumer.TryRemoveEntity(removed);
+        }
+
+        private void HandleSharedExperienceSnapshot(
+            SharedExperienceSnapshotPayload snapshot)
+        {
+            if (!GameSession.IsClient || snapshot == null ||
+                (lastSharedExperienceSequence != 0u &&
+                 snapshot.Sequence <= lastSharedExperienceSequence))
+            {
+                return;
+            }
+
+            lastSharedExperienceSequence = snapshot.Sequence;
+            SharedExperienceState state =
+                GetComponent<SharedExperienceState>();
+            if (state != null)
+            {
+                state.ApplyAuthoritativeState(
+                    snapshot.CurrentLevel,
+                    snapshot.CurrentExperience,
+                    snapshot.ExperienceToNextLevel);
+            }
+
+            if (GameSession.IsHost &&
+                localPlayer != null &&
+                localPlayer.TryGetComponent(
+                    out LevelSystem hostLevelSystem))
+            {
+                hostLevelSystem.ApplyAuthoritativeState(
+                    snapshot.CurrentLevel,
+                    snapshot.CurrentExperience,
+                    snapshot.ExperienceToNextLevel);
+            }
+
+            if (localPlayer != null &&
+                localPlayer.TryGetComponent(
+                    out LevelSystem levelSystem))
+            {
+                levelSystem.ApplyAuthoritativeState(
+                    snapshot.CurrentLevel,
+                    snapshot.CurrentExperience,
+                    snapshot.ExperienceToNextLevel);
+            }
+        }
+
+        private void ConfigureHostSharedExperiencePublisher(
+            Action<SharedExperienceSnapshotPayload> send)
+        {
+            SharedExperienceState shared =
+                GetComponent<SharedExperienceState>();
+            HostSharedExperiencePublisher publisher =
+                GetComponent<HostSharedExperiencePublisher>();
+            if (publisher == null)
+            {
+                publisher = gameObject.AddComponent<HostSharedExperiencePublisher>();
+            }
+            publisher.Configure(shared, send);
+            shared.StateChanged += ApplyHostSharedExperienceToLocalPlayer;
+        }
+
+        private void ApplyHostSharedExperienceToLocalPlayer(
+            int level,
+            int experience,
+            int experienceToNext)
+        {
+            if (!GameSession.IsHost || localPlayer == null ||
+                !localPlayer.TryGetComponent(
+                    out LevelSystem levelSystem))
+            {
+                return;
+            }
+
+            levelSystem.ApplyAuthoritativeState(
+                level,
+                experience,
+                experienceToNext);
         }
 
         private void ApplyAuthoritativePlayerHealth(
@@ -1415,6 +1597,40 @@ namespace TopDownRoguelike.Gameplay.Networking
             return true;
         }
 
+        private bool TryConfigureHostExperienceOrbSpawnPublisher(
+            Action<WorldEntityRecord> sendSpawn)
+        {
+            if (!GameSession.IsHost ||
+                sendSpawn == null)
+            {
+                return false;
+            }
+
+            ExperienceOrbPool orbPool =
+                FindObjectOfType<ExperienceOrbPool>();
+
+            if (orbPool == null)
+            {
+                return false;
+            }
+
+            HostExperienceOrbSpawnPublisher publisher =
+                GetComponent<HostExperienceOrbSpawnPublisher>();
+
+            if (publisher == null)
+            {
+                publisher =
+                    gameObject.AddComponent<
+                        HostExperienceOrbSpawnPublisher>();
+            }
+
+            publisher.Configure(
+                orbPool,
+                sendSpawn);
+
+            return true;
+        }
+
         private bool TryConfigureHostEnemyDeathPublisher(
             Action<WorldEntityRemovedPayload> sendRemoval)
         {
@@ -1441,6 +1657,36 @@ namespace TopDownRoguelike.Gameplay.Networking
             }
 
             publisher.Configure(enemySpawner, sendRemoval);
+            return true;
+        }
+
+        private bool TryConfigureHostExperienceOrbCollectionPublisher(
+            Action<WorldEntityRemovedPayload> sendRemoval)
+        {
+            if (!GameSession.IsHost || sendRemoval == null)
+            {
+                return false;
+            }
+
+            ExperienceOrbPool orbPool =
+                FindObjectOfType<ExperienceOrbPool>();
+
+            if (orbPool == null)
+            {
+                return false;
+            }
+
+            HostExperienceOrbCollectionPublisher publisher =
+                GetComponent<HostExperienceOrbCollectionPublisher>();
+
+            if (publisher == null)
+            {
+                publisher =
+                    gameObject.AddComponent<
+                        HostExperienceOrbCollectionPublisher>();
+            }
+
+            publisher.Configure(orbPool, sendRemoval);
             return true;
         }
 

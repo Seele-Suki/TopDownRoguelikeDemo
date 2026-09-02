@@ -123,12 +123,14 @@ namespace tdr::net
     }
 
     std::vector<std::vector<std::uint8_t>>
-        TcpClientSession::TakeWorldEntityRemovalPayloads()
+    TcpClientSession::TakeWorldEntityRemovalPayloads()
     {
         std::vector<std::vector<std::uint8_t>> payloads;
         payloads.swap(worldEntityRemovalPayloads_);
         return payloads;
     }
+
+    std::vector<std::vector<std::uint8_t>> TcpClientSession::TakeSharedExperiencePayloads(){ std::vector<std::vector<std::uint8_t>> p; p.swap(sharedExperiencePayloads_); return p; }
 
     void TcpClientSession::LeaveRoom()
     {
@@ -642,6 +644,8 @@ namespace tdr::net
 
             return;
         }
+
+        if (packet.type == tdr::protocol::MessageType::SharedExperienceSnapshot) { sharedExperiencePayloads_.push_back(packet.payload); return; }
 
         throw std::invalid_argument(
             "TCP client session received "

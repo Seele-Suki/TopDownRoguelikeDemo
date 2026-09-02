@@ -1,4 +1,5 @@
 using UnityEngine;
+using TopDownRoguelike.Infrastructure;
 
 namespace TopDownRoguelike.Gameplay.Experience
 {
@@ -8,7 +9,11 @@ namespace TopDownRoguelike.Gameplay.Experience
 
         private ExperienceOrbPool pool;
 
+        private bool isCollected;
+
         public int ExperienceAmount => experienceAmount;
+
+        public bool IsCollected => isCollected;
 
         public void SetPool(ExperienceOrbPool experienceOrbPool)
         {
@@ -18,18 +23,45 @@ namespace TopDownRoguelike.Gameplay.Experience
         public void Initialize(int amount)
         {
             experienceAmount = amount;
+            isCollected = false;
         }
 
-        public void Collect()
+        public bool TryCollect()
         {
+            if (GameSession.IsClient)
+            {
+                return false;
+            }
+
+            if (isCollected)
+            {
+                return false;
+            }
+
+            isCollected = true;
+
             if (pool != null)
             {
                 pool.ReleaseOrb(this);
             }
             else
             {
-                Destroy(gameObject);
+                if (Application.isPlaying)
+                {
+                    Destroy(gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(gameObject);
+                }
             }
+
+            return true;
+        }
+
+        public void Collect()
+        {
+            TryCollect();
         }
     }
 }

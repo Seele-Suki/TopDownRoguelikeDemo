@@ -25,6 +25,7 @@ namespace
     constexpr std::size_t kMaxHealthOffset = 22U;
     constexpr std::size_t kBossPhaseOffset = 24U;
     constexpr std::size_t kEnemyArchetypeOffset = 25U;
+    constexpr std::size_t kExperienceAmountOffset = 26U;
 
     bool IsValidEntityType(
         const tdr::protocol::WorldEntityType type
@@ -140,7 +141,21 @@ namespace
                 );
             }
 
+            if (entity.experienceAmount == 0U)
+            {
+                throw std::invalid_argument(
+                    "Experience orb amount must be positive."
+                );
+            }
+
             return;
+        }
+
+        if (entity.experienceAmount != 0U)
+        {
+            throw std::invalid_argument(
+                "Non-orb entity contains experience amount."
+            );
         }
 
         if (entity.maxHealth == 0U ||
@@ -349,7 +364,8 @@ namespace tdr::protocol
             encoded.push_back(
                 static_cast<std::uint8_t>(
                     entity.enemyArchetype));
-            encoded.insert(encoded.end(), 6U, 0U);
+            AppendNetwork16(encoded, entity.experienceAmount);
+            encoded.insert(encoded.end(), 4U, 0U);
         }
 
         return encoded;
@@ -424,8 +440,11 @@ namespace tdr::protocol
                 static_cast<NetworkEnemyArchetype>(
                     data[offset++]);
 
+            entity.experienceAmount =
+                ReadNetwork16(data, offset);
+
             for (std::size_t reservedIndex = 0U;
-                reservedIndex < 6U;
+                reservedIndex < 4U;
                 ++reservedIndex)
             {
                 if (data[offset + reservedIndex] != 0U)
@@ -436,7 +455,7 @@ namespace tdr::protocol
                 }
             }
 
-            offset += 6U;
+            offset += 4U;
             snapshot.entities.push_back(entity);
         }
 

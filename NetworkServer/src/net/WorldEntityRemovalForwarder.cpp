@@ -43,13 +43,22 @@ namespace tdr::net
                 payload.data(),
                 payload.size());
 
-        if (removed.entityType !=
-                tdr::protocol::WorldEntityType::Enemy ||
-            removed.reason !=
-                tdr::protocol::WorldEntityRemovalReason::Died)
+        const bool isEnemyDeath =
+            removed.entityType ==
+                tdr::protocol::WorldEntityType::Enemy &&
+            removed.reason ==
+                tdr::protocol::WorldEntityRemovalReason::Died;
+
+        const bool isExperienceOrbDespawn =
+            removed.entityType ==
+                tdr::protocol::WorldEntityType::ExperienceOrb &&
+            removed.reason ==
+                tdr::protocol::WorldEntityRemovalReason::Despawned;
+
+        if (!isEnemyDeath && !isExperienceOrbDespawn)
         {
             throw std::invalid_argument(
-                "Phase 6 enemy death requires Enemy and Died."
+                "World entity removal type and reason are invalid."
             );
         }
 

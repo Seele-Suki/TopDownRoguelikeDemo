@@ -222,6 +222,18 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void NetworkUpgradeCoordinator_ExposesReusableIdleResetFlow()
+        {
+            Type coordinatorType = FindType(CoordinatorTypeName);
+            Assert.That(coordinatorType, Is.Not.Null);
+            Assert.That(
+                coordinatorType.GetMethod(
+                    "ResetState",
+                    BindingFlags.Instance | BindingFlags.Public),
+                Is.Not.Null);
+        }
+
+        [Test]
         public void UpgradeManager_ExposesNetworkWaitingState()
         {
             Type upgradeManagerType = FindType(UpgradeManagerTypeName);

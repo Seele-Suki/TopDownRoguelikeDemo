@@ -12,6 +12,12 @@ namespace TopDownRoguelike.Gameplay.Bosses
         private float remainingLifetime;
         private bool initialized;
 
+        public Vector2 MoveDirection => moveDirection;
+        public GameObject Owner => owner;
+        public int Damage => damage;
+        public float Speed => speed;
+        public bool IsInitialized => initialized;
+
         public void Initialize(
             Vector2 direction,
             GameObject source,

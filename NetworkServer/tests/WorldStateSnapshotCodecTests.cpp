@@ -248,6 +248,34 @@ namespace
             "Experience orb amount did not round-trip."
         );
     }
+
+    void WorldStateSnapshotPreservesBossProjectileMetadata()
+    {
+        using namespace tdr::protocol;
+
+        WorldEntityRecord projectile{};
+        projectile.entityId = 0x30000001U;
+        projectile.entityType = WorldEntityType::BossProjectile;
+        projectile.lifecycle = WorldEntityLifecycle::Snapshot;
+        projectile.flags = WorldEntityFlags::Active;
+        projectile.directionX = 0.7071F;
+        projectile.directionY = 0.7071F;
+        projectile.projectileSpeed = 8.0F;
+        projectile.projectileDamage = 12U;
+        projectile.projectileSequence = 7U;
+
+        WorldStateSnapshotPayload snapshot{};
+        snapshot.entities.push_back(projectile);
+        const auto encoded = WorldStateSnapshotCodec::Encode(snapshot);
+        const auto decoded = WorldStateSnapshotCodec::Decode(
+            encoded.data(),
+            encoded.size());
+
+        Require(decoded.entities[0].projectileDamage == 12U,
+            "Boss projectile damage did not round-trip.");
+        Require(decoded.entities[0].projectileSequence == 7U,
+            "Boss projectile sequence did not round-trip.");
+    }
 }
 
 int main()
@@ -259,6 +287,7 @@ int main()
         WorldStateSnapshotRejectsInvalidHealth();
         WorldStateSnapshotPreservesEnemyArchetype();
         WorldStateSnapshotPreservesExperienceOrbAmount();
+        WorldStateSnapshotPreservesBossProjectileMetadata();
         std::cout << "WorldStateSnapshotCodec tests passed.\n";
         return 0;
     }

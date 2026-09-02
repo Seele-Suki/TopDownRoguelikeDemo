@@ -1,5 +1,7 @@
 using System.Collections;
 using TopDownRoguelike.Gameplay.Combat;
+using TopDownRoguelike.Gameplay.Networking;
+using TopDownRoguelike.Networking.Gameplay;
 using UnityEngine;
 
 namespace TopDownRoguelike.Gameplay.Bosses
@@ -44,6 +46,7 @@ namespace TopDownRoguelike.Gameplay.Bosses
 
         private Rigidbody2D rb;
         private Transform target;
+        private NetworkPlayerRegistry playerRegistry;
         private bool useProjectileNext = true;
         private float nextContactDamageTime;
 
@@ -103,6 +106,7 @@ namespace TopDownRoguelike.Gameplay.Bosses
                 return;
             }
 
+            ResolveTarget();
             if (target == null)
             {
                 FindPlayer();
@@ -144,6 +148,28 @@ namespace TopDownRoguelike.Gameplay.Bosses
                 Debug.LogWarning(
                     "BossController could not find Player.");
             }
+        }
+
+        public void ConfigureTargetRegistry(NetworkPlayerRegistry registry)
+        {
+            playerRegistry = registry;
+            ResolveTarget();
+        }
+
+        private void ResolveTarget()
+        {
+            if (playerRegistry != null &&
+                NetworkCombatTargetSelector.TrySelectNearest(
+                    playerRegistry,
+                    transform.position,
+                    out _,
+                    out Transform selected))
+            {
+                target = selected;
+                return;
+            }
+
+            FindPlayer();
         }
 
         private void ChasePlayer()

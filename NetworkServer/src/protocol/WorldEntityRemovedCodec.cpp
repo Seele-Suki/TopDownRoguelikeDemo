@@ -25,7 +25,7 @@ namespace
         if (entityType < static_cast<std::uint8_t>(
                 WorldEntityType::Player) ||
             entityType > static_cast<std::uint8_t>(
-                WorldEntityType::ExperienceOrb))
+                WorldEntityType::BossProjectile))
         {
             throw std::invalid_argument(
                 "Removed entity type is invalid."

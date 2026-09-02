@@ -22,6 +22,9 @@ namespace TopDownRoguelike.Infrastructure
         public static bool IsHost =>
             CurrentMode == GameMode.MultiplayerHost;
 
+        public static bool IsGameplayAuthority =>
+            CurrentMode == GameMode.SinglePlayer || IsHost;
+
         public static bool IsClient =>
             CurrentMode == GameMode.MultiplayerClient;
 

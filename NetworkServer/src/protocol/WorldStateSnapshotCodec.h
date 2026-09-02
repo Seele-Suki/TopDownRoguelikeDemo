@@ -11,7 +11,7 @@ namespace tdr::protocol
         kWorldStateSnapshotPrefixSize = 4U;
 
     inline constexpr std::size_t
-        kWorldEntityRecordSize = 32U;
+        kWorldEntityRecordSize = 48U;
 
     inline constexpr std::size_t
         kMaxWorldEntityRecords = 64U;
@@ -22,6 +22,7 @@ namespace tdr::protocol
         Enemy = 2U,
         Boss = 3U,
         ExperienceOrb = 4U
+        , BossProjectile = 5U
     };
 
     enum class WorldEntityLifecycle : std::uint8_t
@@ -63,6 +64,11 @@ namespace tdr::protocol
         NetworkEnemyArchetype enemyArchetype =
             NetworkEnemyArchetype::Invalid;
         std::uint16_t experienceAmount = 0U;
+        float directionX = 0.0F;
+        float directionY = 0.0F;
+        float projectileSpeed = 0.0F;
+        std::uint16_t projectileDamage = 0U;
+        std::uint32_t projectileSequence = 0U;
     };
 
     struct WorldStateSnapshotPayload final

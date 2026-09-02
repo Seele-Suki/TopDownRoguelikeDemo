@@ -6263,6 +6263,7 @@ MonoBehaviour:
   clientSpawnPoint: {fileID: 974414194}
   cameraFollow: {fileID: 519420033}
   healthBarView: {fileID: 387428862}
+  bossProjectilePrefab: {fileID: 8322521547677398178, guid: ecc5efa9d3c18b8458a277169b4b155d, type: 3}
 --- !u!4 &1352990334
 Transform:
   m_ObjectHideFlags: 0
@@ -9285,6 +9286,10 @@ PrefabInstance:
       propertyPath: projectilePool
       value: 
       objectReference: {fileID: 604749243}
+    - target: {fileID: 1105866802281026622, guid: 624ef4bc053045d4b9239d81c6e47397, type: 3}
+      propertyPath: m_Radius
+      value: 0.55
+      objectReference: {fileID: 0}
     - target: {fileID: 3298266706827506734, guid: 624ef4bc053045d4b9239d81c6e47397, type: 3}
       propertyPath: projectilePool
       value: 

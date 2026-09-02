@@ -222,5 +222,40 @@ namespace TopDownRoguelike.Tests.EditMode
                             playerWithArchetype
                         })));
         }
+
+        [Test]
+        public void EncodeThenDecode_PreservesBossProjectileMetadata()
+        {
+            var projectile = new WorldEntityRecord(
+                0x30000001u,
+                NetworkEntityType.BossProjectile,
+                WorldEntityLifecycle.Snapshot,
+                WorldEntityFlags.Active,
+                1.5f,
+                -2.5f,
+                45f,
+                0,
+                0,
+                0,
+                NetworkEnemyArchetype.Invalid,
+                0,
+                0.7071f,
+                0.7071f,
+                8f,
+                12,
+                7u);
+
+            WorldStateSnapshotPayload decoded =
+                WorldStateSnapshotCodec.Decode(
+                    WorldStateSnapshotCodec.Encode(
+                        new WorldStateSnapshotPayload(
+                            new[] { projectile })));
+
+            Assert.That(decoded.Entities[0].DirectionX, Is.EqualTo(0.7071f));
+            Assert.That(decoded.Entities[0].DirectionY, Is.EqualTo(0.7071f));
+            Assert.That(decoded.Entities[0].ProjectileSpeed, Is.EqualTo(8f));
+            Assert.That(decoded.Entities[0].ProjectileDamage, Is.EqualTo((ushort)12));
+            Assert.That(decoded.Entities[0].ProjectileSequence, Is.EqualTo(7u));
+        }
     }
 }

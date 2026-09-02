@@ -6,6 +6,7 @@ namespace TopDownRoguelike.Networking.Protocol
         Player = 1,
         Enemy = 2,
         Boss = 3,
-        ExperienceOrb = 4
+        ExperienceOrb = 4,
+        BossProjectile = 5
     }
 }

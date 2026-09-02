@@ -44,6 +44,9 @@ namespace TopDownRoguelike.Gameplay.Networking
         [SerializeField]
         private HealthBarView healthBarView;
 
+        [SerializeField]
+        private BossProjectile bossProjectilePrefab;
+
         private NetworkPlayerRegistry registry;
         private NetworkEntityRegistry entityRegistry;
         private GameObject localPlayer;
@@ -202,6 +205,10 @@ namespace TopDownRoguelike.Gameplay.Networking
                 localPlayerId,
                 remotePlayerId);
 
+            FindObjectOfType<EnemySpawner>()?.ConfigureTargetRegistry(registry);
+            FindObjectOfType<BossEncounterController>()?
+                .ConfigureTargetRegistry(registry);
+
             if (enabled)
             {
                 SubscribeToRemoteInput(
@@ -251,6 +258,13 @@ namespace TopDownRoguelike.Gameplay.Networking
                     FailConfiguration(
                         "The host experience orb spawn publisher " +
                         "could not be configured.");
+                }
+
+                if (enabled)
+                {
+                    ConfigureBossProjectileBridge(
+                        networkBehaviour.Client.SendWorldEntitySpawned,
+                        networkBehaviour.Client.SendWorldEntityRemoved);
                 }
 
                 if (enabled &&
@@ -1353,7 +1367,10 @@ namespace TopDownRoguelike.Gameplay.Networking
                     ? bossEncounter.CreateClientBoss(record)
                     : record.EntityType == NetworkEntityType.Enemy
                         ? enemySpawner.CreateClientEnemy(record)
-                        : pool.CreateClientOrb(record));
+                        : record.EntityType == NetworkEntityType.BossProjectile
+                            ? GetComponent<NetworkBossProjectileBridge>()
+                                ?.CreateClientProjectile(record)?.gameObject
+                            : pool.CreateClientOrb(record));
             clientWorldSnapshotConsumer.ConfigureEntityRemover(
                 entity =>
                 {
@@ -1374,7 +1391,7 @@ namespace TopDownRoguelike.Gameplay.Networking
                         sender, sequence, snapshot);
             client.WorldEntitySpawnedReceived +=
                 record => clientWorldSnapshotConsumer.EnqueueSpawn(record);
-            client.WorldEntityRemovedReceived +=
+                client.WorldEntityRemovedReceived +=
                 removed =>
                 {
                     bool removedSuccessfully =
@@ -1384,6 +1401,27 @@ namespace TopDownRoguelike.Gameplay.Networking
                         $"entity={removed.EntityId} type={removed.EntityType} " +
                         $"success={removedSuccessfully}");
                 };
+            ConfigureBossProjectileBridge(null, null);
+        }
+
+        private void ConfigureBossProjectileBridge(
+            Action<WorldEntityRecord> sendSpawn,
+            Action<WorldEntityRemovedPayload> sendRemoval)
+        {
+            NetworkBossProjectileBridge bridge =
+                GetComponent<NetworkBossProjectileBridge>();
+            if (bridge == null)
+                bridge = gameObject.AddComponent<NetworkBossProjectileBridge>();
+
+            bridge.SetProjectilePrefab(bossProjectilePrefab);
+
+            if (GameSession.IsHost && sendSpawn != null && sendRemoval != null)
+            {
+                bridge.Configure(
+                    bossProjectilePrefab,
+                    sendSpawn,
+                    sendRemoval);
+            }
         }
 
         private void HandleSharedExperienceSnapshot(

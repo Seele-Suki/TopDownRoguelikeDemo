@@ -80,6 +80,36 @@ namespace TopDownRoguelike.Tests.EditMode
             }
         }
 
+        [Test]
+        public void Update_ResolvesDamageableOnTargetParent()
+        {
+            GameSession.ConfigureMultiplayerHost();
+            Type attackType = FindType(AttackTypeName);
+            Type playerHealthType = FindType(PlayerHealthTypeName);
+            var enemy = new GameObject("Parent Target Enemy");
+            var player = new GameObject("Parent Target Player");
+            var child = new GameObject("Target Child");
+            child.transform.SetParent(player.transform);
+            try
+            {
+                enemy.SetActive(false);
+                player.SetActive(false);
+                Component attack = enemy.AddComponent(attackType);
+                Component health = player.AddComponent(playerHealthType);
+                playerHealthType.GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(health, null);
+                SetPrivateField(attack, "target", child.transform);
+                attackType.GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(attack, null);
+                Assert.That((int)playerHealthType.GetProperty("CurrentHealth").GetValue(health), Is.EqualTo(9));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(player);
+                UnityEngine.Object.DestroyImmediate(enemy);
+            }
+        }
+
         private static void ConfigureMode(GameMode mode)
         {
             switch (mode)

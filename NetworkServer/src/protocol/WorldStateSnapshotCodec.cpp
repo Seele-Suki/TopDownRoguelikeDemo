@@ -37,6 +37,7 @@ namespace
         case tdr::protocol::WorldEntityType::Enemy:
         case tdr::protocol::WorldEntityType::Boss:
         case tdr::protocol::WorldEntityType::ExperienceOrb:
+        case tdr::protocol::WorldEntityType::BossProjectile:
             return true;
         default:
             return false;
@@ -148,6 +149,27 @@ namespace
                 );
             }
 
+            return;
+        }
+
+        if (entity.entityType == WorldEntityType::BossProjectile)
+        {
+            if (!std::isfinite(entity.directionX) ||
+                !std::isfinite(entity.directionY) ||
+                !std::isfinite(entity.projectileSpeed) ||
+                entity.projectileSpeed <= 0.0F ||
+                entity.projectileDamage == 0U ||
+                entity.projectileSequence == 0U ||
+                entity.currentHealth != 0U ||
+                entity.maxHealth != 0U ||
+                entity.experienceAmount != 0U ||
+                entity.bossPhase != 0U ||
+                entity.enemyArchetype != NetworkEnemyArchetype::Invalid)
+            {
+                throw std::invalid_argument(
+                    "Boss projectile metadata is invalid."
+                );
+            }
             return;
         }
 
@@ -365,7 +387,12 @@ namespace tdr::protocol
                 static_cast<std::uint8_t>(
                     entity.enemyArchetype));
             AppendNetwork16(encoded, entity.experienceAmount);
-            encoded.insert(encoded.end(), 4U, 0U);
+            AppendNetworkFloat(encoded, entity.directionX);
+            AppendNetworkFloat(encoded, entity.directionY);
+            AppendNetworkFloat(encoded, entity.projectileSpeed);
+            AppendNetwork16(encoded, entity.projectileDamage);
+            AppendNetwork32(encoded, entity.projectileSequence);
+            encoded.insert(encoded.end(), 2U, 0U);
         }
 
         return encoded;
@@ -443,8 +470,14 @@ namespace tdr::protocol
             entity.experienceAmount =
                 ReadNetwork16(data, offset);
 
+            entity.directionX = ReadNetworkFloat(data, offset);
+            entity.directionY = ReadNetworkFloat(data, offset);
+            entity.projectileSpeed = ReadNetworkFloat(data, offset);
+            entity.projectileDamage = ReadNetwork16(data, offset);
+            entity.projectileSequence = ReadNetwork32(data, offset);
+
             for (std::size_t reservedIndex = 0U;
-                reservedIndex < 4U;
+                reservedIndex < 2U;
                 ++reservedIndex)
             {
                 if (data[offset + reservedIndex] != 0U)
@@ -455,7 +488,7 @@ namespace tdr::protocol
                 }
             }
 
-            offset += 4U;
+            offset += 2U;
             snapshot.entities.push_back(entity);
         }
 

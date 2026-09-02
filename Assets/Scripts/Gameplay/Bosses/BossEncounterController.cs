@@ -38,6 +38,7 @@ namespace TopDownRoguelike.Gameplay.Bosses
         [SerializeField] private GameObject currentBoss;
 
         private BossHealth currentBossHealth;
+        private NetworkPlayerRegistry targetRegistry;
 
         public event System.Action<GameObject> BossSpawned;
 
@@ -83,7 +84,7 @@ namespace TopDownRoguelike.Gameplay.Bosses
 
         private void HandleBossTransitionRequested()
         {
-            if (!GameSession.IsHost)
+            if (!GameSession.IsGameplayAuthority)
             {
                 return;
             }
@@ -161,6 +162,9 @@ namespace TopDownRoguelike.Gameplay.Bosses
             }
 
             currentBossHealth.OnDied += HandleBossDied;
+
+            currentBoss.GetComponent<BossController>()?
+                .ConfigureTargetRegistry(targetRegistry);
 
             BossSpawned?.Invoke(currentBoss);
 
@@ -241,6 +245,13 @@ namespace TopDownRoguelike.Gameplay.Bosses
             }
 
             return clientBoss;
+        }
+
+        public void ConfigureTargetRegistry(NetworkPlayerRegistry registry)
+        {
+            targetRegistry = registry;
+            currentBoss?.GetComponent<BossController>()?
+                .ConfigureTargetRegistry(registry);
         }
 
         private Vector3 GetBossSpawnPosition()

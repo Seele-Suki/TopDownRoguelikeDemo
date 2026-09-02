@@ -254,6 +254,7 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             State = NetworkUpgradeState.Completed;
             gameManager.ResumeGame();
+            ResetState();
         }
 
         public bool ApplyRemoteUpgradeCompletion(
@@ -291,6 +292,7 @@ namespace TopDownRoguelike.Gameplay.Networking
             UpgradeApplied?.Invoke(localPlayerId, selectedOption);
             State = NetworkUpgradeState.Completed;
             gameManager.ResumeGame();
+            ResetState();
             return true;
         }
 

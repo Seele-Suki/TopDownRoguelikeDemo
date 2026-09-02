@@ -99,7 +99,7 @@ namespace TopDownRoguelike.Networking.Protocol
             int entityType = (int)removed.EntityType;
 
             if (entityType < (int)NetworkEntityType.Player ||
-                entityType > (int)NetworkEntityType.ExperienceOrb)
+                entityType > (int)NetworkEntityType.BossProjectile)
             {
                 throw new ArgumentException(
                     "Removed entity type is invalid.",

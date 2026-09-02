@@ -229,6 +229,30 @@ namespace TopDownRoguelike.Gameplay.Networking
                         (ushort)orb.ExperienceAmount;
                 }
 
+                Vector2 projectileDirection = Vector2.zero;
+                float projectileSpeed = 0f;
+                ushort projectileDamage = 0;
+                uint projectileSequence = 0u;
+                if (identifier.EntityType == NetworkEntityType.BossProjectile &&
+                    identifier.TryGetComponent(out BossProjectile projectile))
+                {
+                    projectileDirection = projectile.MoveDirection;
+                    projectileSpeed = projectile.Speed;
+                    projectileDamage = (ushort)Mathf.Clamp(
+                        projectile.Damage, 1, ushort.MaxValue);
+                    NetworkBossProjectileBridge bridge =
+                        FindObjectOfType<NetworkBossProjectileBridge>();
+                    if (bridge != null &&
+                        bridge.TryGetNetworkState(
+                            projectile,
+                            out uint trackedId,
+                            out uint trackedSequence) &&
+                        trackedId == identifier.EntityId)
+                    {
+                        projectileSequence = trackedSequence;
+                    }
+                }
+
                 records.Add(
                     new WorldEntityRecord(
                         identifier.EntityId,
@@ -242,7 +266,12 @@ namespace TopDownRoguelike.Gameplay.Networking
                         maxHealth,
                         bossPhase,
                         enemyArchetype,
-                        experienceAmount));
+                        experienceAmount,
+                        projectileDirection.x,
+                        projectileDirection.y,
+                        projectileSpeed,
+                        projectileDamage,
+                        projectileSequence));
             }
 
             return new WorldStateSnapshotPayload(records);
@@ -326,6 +355,15 @@ namespace TopDownRoguelike.Gameplay.Networking
                         orb != null ? orb.gameObject : null,
                         NetworkEntityType.ExperienceOrb);
                 }
+            }
+
+            foreach (BossProjectile projectile in
+                FindObjectsOfType<BossProjectile>())
+            {
+                AddIdentifier(
+                    identifiers,
+                    projectile != null ? projectile.gameObject : null,
+                    NetworkEntityType.BossProjectile);
             }
 
             return identifiers;

@@ -25,6 +25,7 @@ namespace TopDownRoguelike.Gameplay.Enemies
         private int maxSpawnPositionAttempts = 16;
 
         private bool canSpawn;
+        private NetworkPlayerRegistry targetRegistry;
 
         private float nextSpawnTime;
 
@@ -134,6 +135,11 @@ namespace TopDownRoguelike.Gameplay.Enemies
                 enemyAttack.ApplyDifficulty(
                     currentAttackCooldownMultiplier);
             }
+
+            spawnedEnemy.GetComponent<EnemyMovement>()?
+                .ConfigureTargetRegistry(targetRegistry);
+            spawnedEnemy.GetComponent<EnemyAttack>()?
+                .ConfigureTargetRegistry(targetRegistry);
 
             spawnedEnemies.Add(spawnedEnemy);
             currentAliveEnemies = spawnedEnemies.Count;
@@ -380,6 +386,18 @@ namespace TopDownRoguelike.Gameplay.Enemies
                 {
                     yield return enemy;
                 }
+            }
+        }
+
+        public void ConfigureTargetRegistry(NetworkPlayerRegistry registry)
+        {
+            targetRegistry = registry;
+            foreach (GameObject enemy in spawnedEnemies)
+            {
+                enemy?.GetComponent<EnemyMovement>()?
+                    .ConfigureTargetRegistry(registry);
+                enemy?.GetComponent<EnemyAttack>()?
+                    .ConfigureTargetRegistry(registry);
             }
         }
 

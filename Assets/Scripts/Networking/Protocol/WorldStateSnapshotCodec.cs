@@ -49,6 +49,40 @@ namespace TopDownRoguelike.Networking.Protocol
             BossPhase = bossPhase;
             EnemyArchetype = enemyArchetype;
             ExperienceAmount = experienceAmount;
+            DirectionX = 0f;
+            DirectionY = 0f;
+            ProjectileSpeed = 0f;
+            ProjectileDamage = 0;
+            ProjectileSequence = 0u;
+        }
+
+        public WorldEntityRecord(
+            uint entityId,
+            NetworkEntityType entityType,
+            WorldEntityLifecycle lifecycle,
+            WorldEntityFlags flags,
+            float positionX,
+            float positionY,
+            float rotationDegrees,
+            ushort currentHealth,
+            ushort maxHealth,
+            byte bossPhase,
+            NetworkEnemyArchetype enemyArchetype,
+            ushort experienceAmount,
+            float directionX,
+            float directionY,
+            float projectileSpeed,
+            ushort projectileDamage,
+            uint projectileSequence)
+            : this(entityId, entityType, lifecycle, flags, positionX, positionY,
+                rotationDegrees, currentHealth, maxHealth, bossPhase,
+                enemyArchetype, experienceAmount)
+        {
+            DirectionX = directionX;
+            DirectionY = directionY;
+            ProjectileSpeed = projectileSpeed;
+            ProjectileDamage = projectileDamage;
+            ProjectileSequence = projectileSequence;
         }
 
         public uint EntityId { get; }
@@ -65,6 +99,11 @@ namespace TopDownRoguelike.Networking.Protocol
         public byte BossPhase { get; }
         public NetworkEnemyArchetype EnemyArchetype { get; }
         public ushort ExperienceAmount { get; }
+        public float DirectionX { get; }
+        public float DirectionY { get; }
+        public float ProjectileSpeed { get; }
+        public ushort ProjectileDamage { get; }
+        public uint ProjectileSequence { get; }
     }
 
     public sealed class WorldStateSnapshotPayload
@@ -99,7 +138,7 @@ namespace TopDownRoguelike.Networking.Protocol
     public static class WorldStateSnapshotCodec
     {
         public const int PrefixSize = 4;
-        public const int RecordSize = 32;
+        public const int RecordSize = 48;
         public const int MaxEntityCount = 64;
 
         private const ushort ActiveFlag = 1 << 0;
@@ -198,6 +237,14 @@ namespace TopDownRoguelike.Networking.Protocol
                     payload,
                     offset + 26,
                     entity.ExperienceAmount);
+
+                WriteNetworkFloat(payload, offset + 28, entity.DirectionX);
+                WriteNetworkFloat(payload, offset + 32, entity.DirectionY);
+                WriteNetworkFloat(payload, offset + 36, entity.ProjectileSpeed);
+                PacketCodec.WriteNetworkUInt16(
+                    payload, offset + 40, entity.ProjectileDamage);
+                PacketCodec.WriteNetworkUInt32(
+                    payload, offset + 42, entity.ProjectileSequence);
 
                 offset += RecordSize;
             }
@@ -306,7 +353,13 @@ namespace TopDownRoguelike.Networking.Protocol
                         payload,
                         offset + 26);
 
-                for (int reservedOffset = 28;
+                float directionX = ReadNetworkFloat(payload, offset + 28);
+                float directionY = ReadNetworkFloat(payload, offset + 32);
+                float projectileSpeed = ReadNetworkFloat(payload, offset + 36);
+                ushort projectileDamage = PacketCodec.ReadNetworkUInt16(payload, offset + 40);
+                uint projectileSequence = PacketCodec.ReadNetworkUInt32(payload, offset + 42);
+
+                for (int reservedOffset = 46;
                     reservedOffset < RecordSize;
                     reservedOffset++)
                 {
@@ -331,7 +384,12 @@ namespace TopDownRoguelike.Networking.Protocol
                         maxHealth,
                         bossPhase,
                         enemyArchetype,
-                        experienceAmount));
+                        experienceAmount,
+                        directionX,
+                        directionY,
+                        projectileSpeed,
+                        projectileDamage,
+                        projectileSequence));
 
                 offset += RecordSize;
             }
@@ -365,7 +423,7 @@ namespace TopDownRoguelike.Networking.Protocol
                 if (entityTypeValue <
                         (byte)NetworkEntityType.Player ||
                     entityTypeValue >
-                        (byte)NetworkEntityType.ExperienceOrb)
+                        (byte)NetworkEntityType.BossProjectile)
                 {
                     throw new ArgumentException(
                         "World entity type is invalid.");
@@ -429,6 +487,25 @@ namespace TopDownRoguelike.Networking.Protocol
                     {
                         throw new ArgumentException(
                             "Experience orb amount must be positive.");
+                    }
+                }
+                else if (entity.EntityType ==
+                    NetworkEntityType.BossProjectile)
+                {
+                    if (!IsFinite(entity.DirectionX) ||
+                        !IsFinite(entity.DirectionY) ||
+                        !IsFinite(entity.ProjectileSpeed) ||
+                        entity.ProjectileSpeed <= 0f ||
+                        entity.ProjectileDamage == 0 ||
+                        entity.ProjectileSequence == 0u ||
+                        entity.CurrentHealth != 0 ||
+                        entity.MaxHealth != 0 ||
+                        entity.ExperienceAmount != 0 ||
+                        entity.BossPhase != 0 ||
+                        entity.EnemyArchetype != NetworkEnemyArchetype.Invalid)
+                    {
+                        throw new ArgumentException(
+                            "Boss projectile metadata is invalid.");
                     }
                 }
                 else

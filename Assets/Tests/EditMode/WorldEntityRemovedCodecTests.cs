@@ -52,5 +52,21 @@ namespace TopDownRoguelike.Tests.EditMode
             Assert.Throws<ArgumentException>(
                 () => WorldEntityRemovedCodec.Decode(valid));
         }
+
+        [Test]
+        public void EncodeThenDecode_AllowsBossProjectileDespawn()
+        {
+            var expected = new WorldEntityRemovedPayload(
+                0x30000001u,
+                NetworkEntityType.BossProjectile,
+                WorldEntityRemovalReason.Despawned);
+
+            WorldEntityRemovedPayload decoded =
+                WorldEntityRemovedCodec.Decode(
+                    WorldEntityRemovedCodec.Encode(expected));
+
+            Assert.That(decoded.EntityType, Is.EqualTo(NetworkEntityType.BossProjectile));
+            Assert.That(decoded.Reason, Is.EqualTo(WorldEntityRemovalReason.Despawned));
+        }
     }
 }

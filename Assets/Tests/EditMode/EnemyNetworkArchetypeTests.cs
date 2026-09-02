@@ -115,6 +115,52 @@ namespace TopDownRoguelike.Tests.EditMode
                 Is.EqualTo(expectedArchetype));
         }
 
+        [Test]
+        public void EnemySpawnEntry_ReportsPrefabArchetype()
+        {
+            GameObject prefab = new GameObject("Fast Enemy Prefab");
+            Type enemyDataType = FindType(EnemyDataTypeName);
+            Type enemyHealthType = FindType(
+                "TopDownRoguelike.Gameplay.Enemies.EnemyHealth");
+            Type spawnEntryType = FindType(
+                "TopDownRoguelike.Gameplay.Enemies.EnemySpawnEntry");
+
+            Assert.That(enemyDataType, Is.Not.Null);
+            Assert.That(enemyHealthType, Is.Not.Null);
+            Assert.That(spawnEntryType, Is.Not.Null);
+
+            ScriptableObject data = ScriptableObject.CreateInstance(
+                enemyDataType);
+            try
+            {
+                FieldInfo archetypeField = enemyDataType.GetField(
+                    "networkArchetype",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                archetypeField.SetValue(data, NetworkEnemyArchetype.Fast);
+                Component health = prefab.AddComponent(enemyHealthType);
+                enemyHealthType.GetField(
+                    "enemyData",
+                    BindingFlags.Instance | BindingFlags.NonPublic)
+                    .SetValue(health, data);
+
+                object entry = Activator.CreateInstance(spawnEntryType);
+                spawnEntryType.GetField(
+                    "enemyPrefab",
+                    BindingFlags.Instance | BindingFlags.NonPublic)
+                    .SetValue(entry, prefab);
+
+                Assert.That(
+                    spawnEntryType.GetProperty("NetworkArchetype")
+                        .GetValue(entry),
+                    Is.EqualTo(NetworkEnemyArchetype.Fast));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefab);
+                UnityEngine.Object.DestroyImmediate(data);
+            }
+        }
+
         private static Type FindType(
             string fullTypeName)
         {

@@ -1202,11 +1202,34 @@ namespace TopDownRoguelike.Gameplay.Networking
             uint playerId,
             UpgradeData upgradeData)
         {
-            NetworkClient client = NetworkClientBehaviour.Instance?.Client;
-            if (client != null && playerId == client.PlayerId)
+            if (playerId == 0u ||
+                upgradeData == null ||
+                networkUpgradeCoordinator == null)
             {
-                networkUpgradeCoordinator.UpgradeManager
-                    .ApplyUpgrade(upgradeData);
+                return;
+            }
+
+            UpgradeManager upgradeManager =
+                networkUpgradeCoordinator.UpgradeManager;
+
+            if (registry != null &&
+                registry.TryGetPlayer(
+                    playerId,
+                    out GameObject targetPlayer) &&
+                targetPlayer != null)
+            {
+                upgradeManager.ApplyUpgradeToPlayer(
+                    targetPlayer,
+                    upgradeData);
+                return;
+            }
+
+            NetworkClient client =
+                NetworkClientBehaviour.Instance?.Client;
+            if (client != null &&
+                client.PlayerId == playerId)
+            {
+                upgradeManager.ApplyUpgrade(upgradeData);
             }
         }
 
@@ -1313,10 +1336,12 @@ namespace TopDownRoguelike.Gameplay.Networking
 
             ExperienceOrbPool pool =
                 FindObjectOfType<ExperienceOrbPool>();
+            EnemySpawner enemySpawner =
+                FindObjectOfType<EnemySpawner>();
             BossEncounterController bossEncounter =
                 FindObjectOfType<BossEncounterController>();
 
-            if (pool == null || bossEncounter == null)
+            if (pool == null || bossEncounter == null || enemySpawner == null)
             {
                 return;
             }
@@ -1326,7 +1351,9 @@ namespace TopDownRoguelike.Gameplay.Networking
             clientWorldSnapshotConsumer.ConfigureEntityFactory(
                 record => record.EntityType == NetworkEntityType.Boss
                     ? bossEncounter.CreateClientBoss(record)
-                    : pool.CreateClientOrb(record));
+                    : record.EntityType == NetworkEntityType.Enemy
+                        ? enemySpawner.CreateClientEnemy(record)
+                        : pool.CreateClientOrb(record));
             clientWorldSnapshotConsumer.ConfigureEntityRemover(
                 entity =>
                 {

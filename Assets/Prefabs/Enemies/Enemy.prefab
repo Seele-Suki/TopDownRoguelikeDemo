@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 8112104098739341998}
   - component: {fileID: 8699882748445982544}
   - component: {fileID: -851578406963997022}
+  - component: {fileID: 8439871694018910104}
   m_Layer: 0
   m_Name: Enemy
   m_TagString: Untagged
@@ -204,6 +205,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   enemyData: {fileID: 11400000, guid: 1e9d4d5cc9dd5d446a52dfeae7a63e1a, type: 2}
   attackCooldownMultiplier: 1
+--- !u!114 &8439871694018910104
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6775853174993648476}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31761fc11ecb54045b2a3cc7546d9774, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &8653586477237083467
 GameObject:
   m_ObjectHideFlags: 0

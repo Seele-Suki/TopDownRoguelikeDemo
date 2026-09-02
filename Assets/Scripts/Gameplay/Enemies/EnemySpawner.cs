@@ -141,6 +141,73 @@ namespace TopDownRoguelike.Gameplay.Enemies
             return true;
         }
 
+        public GameObject CreateClientEnemy(
+            WorldEntityRecord record)
+        {
+            if (!GameSession.IsClient ||
+                record == null ||
+                record.EntityType != NetworkEntityType.Enemy ||
+                record.EntityId == 0u ||
+                enemyEntries == null ||
+                enemyEntries.Length == 0)
+            {
+                return null;
+            }
+
+            GameObject prefab = SelectClientEnemyPrefab(
+                record.EnemyArchetype);
+            if (prefab == null)
+                return null;
+
+            GameObject enemy = Instantiate(
+                prefab,
+                new Vector3(record.PositionX, record.PositionY, 0f),
+                Quaternion.Euler(0f, 0f, record.RotationDegrees));
+
+            NetworkEntityId identifier =
+                enemy.GetComponent<NetworkEntityId>();
+            if (identifier == null)
+                identifier = enemy.AddComponent<NetworkEntityId>();
+
+            if (!identifier.TryAssign(record.EntityId, NetworkEntityType.Enemy))
+            {
+                Destroy(enemy);
+                return null;
+            }
+
+            EnemyMovement movement = enemy.GetComponent<EnemyMovement>();
+            if (movement != null)
+                movement.enabled = false;
+            EnemyAttack attack = enemy.GetComponent<EnemyAttack>();
+            if (attack != null)
+                attack.enabled = false;
+            return enemy;
+        }
+
+        private GameObject SelectClientEnemyPrefab(
+            NetworkEnemyArchetype archetype)
+        {
+            GameObject fallback = null;
+
+            foreach (EnemySpawnEntry entry in enemyEntries)
+            {
+                if (entry == null || entry.EnemyPrefab == null)
+                    continue;
+
+                if (entry.NetworkArchetype == archetype)
+                    return entry.EnemyPrefab;
+
+                if (fallback == null &&
+                    (archetype == NetworkEnemyArchetype.Invalid ||
+                     entry.NetworkArchetype == NetworkEnemyArchetype.Basic))
+                {
+                    fallback = entry.EnemyPrefab;
+                }
+            }
+
+            return fallback;
+        }
+
         private bool TryGetSpawnPosition(out Vector3 spawnPosition)
         {
             spawnPosition = Vector3.zero;

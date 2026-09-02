@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
 using NUnit.Framework;
@@ -1070,6 +1071,105 @@ namespace TopDownRoguelike.Tests.EditMode
 
                 UnityEngine.Object.DestroyImmediate(
                     consumerObject);
+            }
+        }
+
+        [Test]
+        public void TryConsumeSnapshot_RemovesEnemyMissingFromAuthoritativeSnapshot()
+        {
+            GameSession.ConfigureMultiplayerClient();
+
+            var consumerObject = new GameObject("Stale Enemy Consumer");
+            var enemyObject = new GameObject("Stale Enemy");
+            try
+            {
+                Type consumerType = FindType(ConsumerTypeName);
+                Component consumer = consumerObject.AddComponent(consumerType);
+                ConfigureAuthoritativeHost(consumerType, consumer, 1u);
+
+                var registry = new NetworkEntityRegistry();
+                NetworkEntityId identifier = enemyObject.AddComponent<NetworkEntityId>();
+                Assert.That(identifier.TryAssign(123u, NetworkEntityType.Enemy), Is.True);
+                Assert.That(registry.TryRegister(identifier), Is.True);
+                consumerType.GetMethod("ConfigureEntityRegistry")
+                    .Invoke(consumer, new object[] { registry });
+
+                var removed = new List<GameObject>();
+                consumerType.GetMethod("ConfigureEntityRemover")
+                    .Invoke(consumer, new object[] { (Action<GameObject>)(value => removed.Add(value)) });
+
+                var snapshot = new WorldStateSnapshotPayload(
+                    new[]
+                    {
+                        new WorldEntityRecord(
+                            1u,
+                            NetworkEntityType.Player,
+                            WorldEntityLifecycle.Snapshot,
+                            WorldEntityFlags.Active,
+                            0f, 0f, 0f, 10, 10)
+                    });
+
+                MethodInfo consume = consumerType.GetMethod(
+                    "TryConsumeSnapshot",
+                    new[] { typeof(uint), typeof(uint), typeof(WorldStateSnapshotPayload) });
+
+                Assert.That(InvokeConsume(consume, consumer, 1u, 1u, snapshot), Is.True);
+                Assert.That(registry.TryGet(123u, out _), Is.False);
+                Assert.That(removed, Has.Count.EqualTo(1));
+                Assert.That(removed[0], Is.SameAs(enemyObject));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(enemyObject);
+                UnityEngine.Object.DestroyImmediate(consumerObject);
+            }
+        }
+
+        [Test]
+        public void ProcessPendingSnapshots_AppliesOnlyNewestQueuedSnapshot()
+        {
+            GameSession.ConfigureMultiplayerClient();
+            var consumerObject = new GameObject("Snapshot Queue Consumer");
+            var entityObject = new GameObject("Snapshot Queue Entity");
+            try
+            {
+                Type consumerType = FindType(ConsumerTypeName);
+                Component consumer = consumerObject.AddComponent(consumerType);
+                ConfigureAuthoritativeHost(consumerType, consumer, 1u);
+
+                var registry = new NetworkEntityRegistry();
+                NetworkEntityId identifier = entityObject.AddComponent<NetworkEntityId>();
+                Assert.That(identifier.TryAssign(321u, NetworkEntityType.Enemy), Is.True);
+                Assert.That(registry.TryRegister(identifier), Is.True);
+                consumerType.GetMethod("ConfigureEntityRegistry")
+                    .Invoke(consumer, new object[] { registry });
+
+                var oldSnapshot = new WorldStateSnapshotPayload(new[]
+                {
+                    new WorldEntityRecord(321u, NetworkEntityType.Enemy,
+                        WorldEntityLifecycle.Update, WorldEntityFlags.Active,
+                        1f, 1f, 0f, 3, 3, 0, NetworkEnemyArchetype.Basic)
+                });
+                var latestSnapshot = new WorldStateSnapshotPayload(new[]
+                {
+                    new WorldEntityRecord(321u, NetworkEntityType.Enemy,
+                        WorldEntityLifecycle.Update, WorldEntityFlags.Active,
+                        9f, 9f, 0f, 3, 3, 0, NetworkEnemyArchetype.Basic)
+                });
+
+                MethodInfo enqueue = consumerType.GetMethod(
+                    "EnqueueSnapshot",
+                    new[] { typeof(uint), typeof(uint), typeof(WorldStateSnapshotPayload) });
+                MethodInfo process = consumerType.GetMethod("ProcessPendingSnapshots");
+                Assert.That((bool)enqueue.Invoke(consumer, new object[] { 1u, 1u, oldSnapshot }), Is.True);
+                Assert.That((bool)enqueue.Invoke(consumer, new object[] { 1u, 2u, latestSnapshot }), Is.True);
+                Assert.That((int)process.Invoke(consumer, null), Is.EqualTo(1));
+                Assert.That(entityObject.transform.position, Is.EqualTo(new Vector3(9f, 9f, 0f)));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(entityObject);
+                UnityEngine.Object.DestroyImmediate(consumerObject);
             }
         }
 

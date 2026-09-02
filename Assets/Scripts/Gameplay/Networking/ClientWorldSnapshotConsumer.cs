@@ -164,7 +164,7 @@ namespace TopDownRoguelike.Gameplay.Networking
                 record.EntityId == 0u ||
                 (record.EntityType != NetworkEntityType.Enemy &&
                  record.EntityType != NetworkEntityType.Boss &&
-                 record.EntityType != NetworkEntityType.ExperienceOrb) ||
+                record.EntityType != NetworkEntityType.ExperienceOrb) ||
                 record.Lifecycle !=
                     WorldEntityLifecycle.Spawn ||
                 (record.Flags &
@@ -216,16 +216,20 @@ namespace TopDownRoguelike.Gameplay.Networking
                 }
             }
 
+            PendingSnapshot latestPendingSnapshot = null;
             while (pendingSnapshots.TryDequeue(
                 out PendingSnapshot pending))
             {
-                if (TryConsumeSnapshot(
-                    pending.SenderPlayerId,
-                    pending.Sequence,
-                    pending.Snapshot))
-                {
-                    processedCount++;
-                }
+                latestPendingSnapshot = pending;
+            }
+
+            if (latestPendingSnapshot != null &&
+                TryConsumeSnapshot(
+                    latestPendingSnapshot.SenderPlayerId,
+                    latestPendingSnapshot.Sequence,
+                    latestPendingSnapshot.Snapshot))
+            {
+                processedCount++;
             }
 
             while (pendingRemovals.TryDequeue(
@@ -315,6 +319,7 @@ namespace TopDownRoguelike.Gameplay.Networking
             }
 
             var seenExperienceOrbIds = new HashSet<uint>();
+            var seenEnemyIds = new HashSet<uint>();
 
             foreach (WorldEntityRecord record
                 in snapshot.Entities)
@@ -328,6 +333,12 @@ namespace TopDownRoguelike.Gameplay.Networking
                     record.Lifecycle != WorldEntityLifecycle.Removed)
                 {
                     seenExperienceOrbIds.Add(record.EntityId);
+                }
+
+                if (record.EntityType == NetworkEntityType.Enemy &&
+                    record.Lifecycle != WorldEntityLifecycle.Removed)
+                {
+                    seenEnemyIds.Add(record.EntityId);
                 }
 
                 if (record.Lifecycle ==
@@ -385,6 +396,7 @@ namespace TopDownRoguelike.Gameplay.Networking
             }
 
             var staleExperienceOrbIds = new List<uint>();
+            var staleEnemyIds = new List<uint>();
             foreach (NetworkEntityId identifier in
                 entityRegistry.EnumerateEntities())
             {
@@ -394,6 +406,13 @@ namespace TopDownRoguelike.Gameplay.Networking
                 {
                     staleExperienceOrbIds.Add(identifier.EntityId);
                 }
+
+                if (identifier != null &&
+                    identifier.EntityType == NetworkEntityType.Enemy &&
+                    !seenEnemyIds.Contains(identifier.EntityId))
+                {
+                    staleEnemyIds.Add(identifier.EntityId);
+                }
             }
 
             foreach (uint staleId in staleExperienceOrbIds)
@@ -401,6 +420,13 @@ namespace TopDownRoguelike.Gameplay.Networking
                 RemoveRegisteredEntity(
                     staleId,
                     NetworkEntityType.ExperienceOrb);
+            }
+
+            foreach (uint staleId in staleEnemyIds)
+            {
+                RemoveRegisteredEntity(
+                    staleId,
+                    NetworkEntityType.Enemy);
             }
 
             return true;

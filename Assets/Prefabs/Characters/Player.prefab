@@ -135,6 +135,7 @@ GameObject:
   - component: {fileID: 3685118826697951548}
   - component: {fileID: 958691990098280200}
   - component: {fileID: 6435509768300727519}
+  - component: {fileID: 4818591114047830969}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -345,6 +346,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   levelSystem: {fileID: 4647972087206125523}
+  sharedExperienceState: {fileID: 0}
 --- !u!114 &3685118826697951548
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -358,7 +360,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   dashData: {fileID: 11400000, guid: 523a76a1d2b00044aba73d7065b93653, type: 2}
-  dashKey: 32
   cooldownRemaining: 0
 --- !u!114 &958691990098280200
 MonoBehaviour:
@@ -394,3 +395,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   mainCamera: {fileID: 0}
+  dashKey: 32
+--- !u!114 &4818591114047830969
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8256583254869339597}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31761fc11ecb54045b2a3cc7546d9774, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

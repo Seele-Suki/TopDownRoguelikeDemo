@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using TopDownRoguelike.Networking.Protocol;
 
 namespace TopDownRoguelike.Gameplay.Enemies
 {
@@ -16,6 +17,21 @@ namespace TopDownRoguelike.Gameplay.Enemies
             AnimationCurve.Linear(0f, 1f, 1f, 1f);
 
         public GameObject EnemyPrefab => enemyPrefab;
+
+        public NetworkEnemyArchetype NetworkArchetype
+        {
+            get
+            {
+                if (enemyPrefab == null ||
+                    !enemyPrefab.TryGetComponent(
+                        out EnemyHealth health))
+                {
+                    return NetworkEnemyArchetype.Invalid;
+                }
+
+                return health.NetworkArchetype;
+            }
+        }
 
         public float GetWeight(float runProgress)
         {

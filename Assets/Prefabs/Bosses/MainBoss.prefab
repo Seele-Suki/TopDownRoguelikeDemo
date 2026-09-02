@@ -99,6 +99,7 @@ GameObject:
   - component: {fileID: 8672007798982900319}
   - component: {fileID: 80417304945505344}
   - component: {fileID: -5682005166706655066}
+  - component: {fileID: 4806784078200496819}
   m_Layer: 0
   m_Name: MainBoss
   m_TagString: Untagged
@@ -297,6 +298,18 @@ MonoBehaviour:
   currentState: 0
   isPhaseTwo: 0
   nextAttackTime: 0
+--- !u!114 &4806784078200496819
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6775853174993648476}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31761fc11ecb54045b2a3cc7546d9774, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &9032616436442766766
 GameObject:
   m_ObjectHideFlags: 0

@@ -63,7 +63,10 @@ namespace TopDownRoguelike.Networking.Client
                     : RoomRole.Client;
             }
 
-            dialogView?.Show(new DisconnectContext(effectiveRole, isInGameplay, reason));
+            DisconnectContext context =
+                new DisconnectContext(effectiveRole, isInGameplay, reason);
+            DisconnectPauseController.TryPause(context);
+            dialogView?.Show(context);
         }
     }
 }

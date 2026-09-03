@@ -2740,6 +2740,8 @@ namespace TopDownRoguelike.Gameplay.Networking
 
         private void OnDestroy()
         {
+            DisconnectPauseController.Clear();
+
             if (!shutdownCoordinator.TryBeginShutdown())
             {
                 return;

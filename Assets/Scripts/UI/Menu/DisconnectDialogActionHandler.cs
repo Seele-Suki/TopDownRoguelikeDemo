@@ -16,6 +16,7 @@ namespace TopDownRoguelike.Menu.UI
         {
             if (!TryBegin())
                 return;
+            DisconnectPauseController.Restore();
             DisconnectClient();
             sceneLoader?.LoadMainMenu();
         }
@@ -24,6 +25,7 @@ namespace TopDownRoguelike.Menu.UI
         {
             if (!TryBegin())
                 return;
+            DisconnectPauseController.Restore();
 
             NetworkGameBootstrap bootstrap =
                 FindObjectOfType<NetworkGameBootstrap>();
@@ -39,6 +41,7 @@ namespace TopDownRoguelike.Menu.UI
         {
             if (!TryBegin())
                 return;
+            DisconnectPauseController.Restore();
             DisconnectClient();
             sceneLoader?.LoadMainMenu();
         }

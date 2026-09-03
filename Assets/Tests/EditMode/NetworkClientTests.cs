@@ -1249,6 +1249,70 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void ForwardedPlayerDied_EmptyPayloadRaisesEventOnce()
+        {
+            var client = new NetworkClient();
+
+            try
+            {
+                int receivedCount = 0;
+                client.PlayerDiedReceived += () => receivedCount++;
+
+                SetClientState(client, NetworkClientState.InRoom);
+
+                DispatchTransportEvent(
+                    client,
+                    NetworkTransportEvent.PacketReceived(
+                        NetworkTransportKind.Tcp,
+                        MessageType.PlayerDied,
+                        Array.Empty<byte>()));
+
+                Assert.That(receivedCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
+        public void ForwardedPlayerDied_NonEmptyPayloadIsRejected()
+        {
+            var client = new NetworkClient();
+
+            try
+            {
+                int receivedCount = 0;
+                client.PlayerDiedReceived += () => receivedCount++;
+
+                SetClientState(client, NetworkClientState.InRoom);
+
+                LogAssert.Expect(
+                    LogType.Error,
+                    "NetworkClient failure: " +
+                    "PlayerDied payload must be empty.");
+                LogAssert.Expect(
+                    LogType.Log,
+                    "NetworkClient state transition: " +
+                    "InRoom -> Error, room='', playerId=0");
+
+                DispatchTransportEvent(
+                    client,
+                    NetworkTransportEvent.PacketReceived(
+                        NetworkTransportKind.Tcp,
+                        MessageType.PlayerDied,
+                        new byte[] { 0x01 }));
+
+                Assert.That(receivedCount, Is.EqualTo(0));
+                Assert.That(client.State, Is.EqualTo(NetworkClientState.Error));
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [Test]
         public void SendWorldEntityRemoved_WhenNotInRoom_RejectsSend()
         {
             var client = new NetworkClient();

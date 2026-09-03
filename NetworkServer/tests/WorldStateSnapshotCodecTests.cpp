@@ -276,6 +276,70 @@ namespace
         Require(decoded.entities[0].projectileSequence == 7U,
             "Boss projectile sequence did not round-trip.");
     }
+
+    void WorldStateSnapshotValidatesBossPhase()
+    {
+        using namespace tdr::protocol;
+
+        WorldEntityRecord boss{};
+        boss.entityId = 7U;
+        boss.entityType = WorldEntityType::Boss;
+        boss.lifecycle = WorldEntityLifecycle::Snapshot;
+        boss.flags = WorldEntityFlags::Active;
+        boss.currentHealth = 10U;
+        boss.maxHealth = 10U;
+
+        WorldStateSnapshotPayload snapshot{};
+        snapshot.entities.push_back(boss);
+
+        for (const std::uint8_t phase : { 1U, 2U })
+        {
+            snapshot.entities[0].bossPhase = phase;
+            const auto encoded = WorldStateSnapshotCodec::Encode(snapshot);
+            const auto decoded = WorldStateSnapshotCodec::Decode(
+                encoded.data(), encoded.size());
+            Require(decoded.entities[0].bossPhase == phase,
+                "Supported Boss phase did not round-trip.");
+        }
+
+        for (const std::uint8_t phase : { 0U, 3U })
+        {
+            snapshot.entities[0].bossPhase = phase;
+            RequireInvalidArgument(
+                [&snapshot]()
+                {
+                    static_cast<void>(
+                        WorldStateSnapshotCodec::Encode(snapshot));
+                },
+                "Unsupported Boss phase was accepted.");
+        }
+    }
+
+    void WorldStateSnapshotRejectsBossPhaseOnNonBoss()
+    {
+        using namespace tdr::protocol;
+
+        WorldEntityRecord enemy{};
+        enemy.entityId = 8U;
+        enemy.entityType = WorldEntityType::Enemy;
+        enemy.lifecycle = WorldEntityLifecycle::Snapshot;
+        enemy.flags = WorldEntityFlags::Active;
+        enemy.currentHealth = 10U;
+        enemy.maxHealth = 10U;
+        enemy.enemyArchetype = NetworkEnemyArchetype::Basic;
+        enemy.bossPhase = 1U;
+
+        WorldStateSnapshotPayload snapshot{};
+        snapshot.entities.push_back(enemy);
+
+        RequireInvalidArgument(
+            [&snapshot]()
+            {
+                static_cast<void>(
+                    WorldStateSnapshotCodec::Encode(snapshot));
+            },
+            "Non-Boss entity accepted a Boss phase.");
+    }
 }
 
 int main()
@@ -288,6 +352,8 @@ int main()
         WorldStateSnapshotPreservesEnemyArchetype();
         WorldStateSnapshotPreservesExperienceOrbAmount();
         WorldStateSnapshotPreservesBossProjectileMetadata();
+        WorldStateSnapshotValidatesBossPhase();
+        WorldStateSnapshotRejectsBossPhaseOnNonBoss();
         std::cout << "WorldStateSnapshotCodec tests passed.\n";
         return 0;
     }

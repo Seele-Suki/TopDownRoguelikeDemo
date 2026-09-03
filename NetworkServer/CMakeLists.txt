@@ -841,6 +841,36 @@ add_test(
     COMMAND PlayerSyncCodecTests
 )
 
+add_executable(PlayerHealthBoundaryTests
+    tests/PlayerHealthBoundaryTests.cpp
+    src/protocol/PlayerStateSnapshotCodec.h
+    src/protocol/PlayerStateSnapshotCodec.cpp
+    src/protocol/NetworkByteOrder.h
+)
+
+target_include_directories(PlayerHealthBoundaryTests
+    PRIVATE
+        src
+)
+
+if (WIN32)
+    target_compile_definitions(PlayerHealthBoundaryTests
+        PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+    )
+
+    target_link_libraries(PlayerHealthBoundaryTests
+        PRIVATE
+            ws2_32
+    )
+endif()
+
+add_test(
+    NAME PlayerHealthBoundaryTests
+    COMMAND PlayerHealthBoundaryTests
+)
+
 add_executable(WorldStateSnapshotCodecTests
     tests/WorldStateSnapshotCodecTests.cpp
     src/protocol/WorldStateSnapshotCodec.h

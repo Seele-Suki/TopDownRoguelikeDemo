@@ -32,6 +32,8 @@ namespace TopDownRoguelike.Networking.Client
 
         private Process startedProcess;
 
+        public bool IsOwnedByCurrentUnityClient { get; private set; }
+
         public ServerStartupMode StartupMode =>
             startupMode;
 
@@ -53,10 +55,12 @@ namespace TopDownRoguelike.Networking.Client
         {
             if (!ShouldStartAutomatically)
             {
+                IsOwnedByCurrentUnityClient = false;
                 return;
             }
 
             StartConfiguredServer();
+            IsOwnedByCurrentUnityClient = true;
         }
 
         private void OnDestroy()
@@ -71,6 +75,10 @@ namespace TopDownRoguelike.Networking.Client
 
             startedProcess =
                 null;
+
+            // A process stored in startedProcess is owned by this launcher.
+            // External/manual servers are never assigned to this field.
+            IsOwnedByCurrentUnityClient = false;
 
             if (process == null)
             {
@@ -150,6 +158,17 @@ namespace TopDownRoguelike.Networking.Client
                     "Operating system did not create " +
                     "the server process.");
             }
+        }
+
+        public bool TryCloseOwnedServer()
+        {
+            if (!IsOwnedByCurrentUnityClient)
+            {
+                return false;
+            }
+
+            StopStartedServer();
+            return true;
         }
 
         private string ResolveExecutablePath()

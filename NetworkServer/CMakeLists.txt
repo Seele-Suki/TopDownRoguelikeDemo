@@ -52,6 +52,7 @@ add_executable(NetworkServer
     src/net/SharedExperienceForwarder.cpp
 
     src/protocol/MessageType.h
+    src/protocol/HeartbeatTiming.h
     src/protocol/MessageHeader.h
     src/protocol/NetworkByteOrder.h
     src/protocol/PacketCodec.h
@@ -113,6 +114,31 @@ if (WIN32)
 endif()
 
 if (BUILD_TESTING)
+    add_executable(TcpHeartbeatTests
+        tests/TcpHeartbeatTests.cpp
+        src/net/ServerCoordinator.cpp src/net/ServerCoordinator.h
+        src/net/TcpClientSession.cpp src/net/TcpClientSession.h
+        src/net/TcpConnection.cpp src/net/TcpConnection.h
+        src/net/SocketRuntime.cpp src/net/SocketRuntime.h
+        src/room/ClientState.cpp src/room/ClientState.h
+        src/room/Room.cpp src/room/Room.h
+        src/room/RoomManager.cpp src/room/RoomManager.h
+        src/room/PlayerIdAllocator.cpp src/room/PlayerIdAllocator.h
+        src/room/SessionTokenGenerator.cpp src/room/SessionTokenGenerator.h
+        src/protocol/PacketCodec.cpp src/protocol/PacketCodec.h
+        src/protocol/MessageType.h src/protocol/MessageHeader.h
+        src/protocol/NetworkByteOrder.h src/protocol/SessionTokenCodec.cpp
+        src/protocol/SessionTokenCodec.h src/protocol/UdpMessageHeader.h
+        src/protocol/UdpSequenceTracker.h
+        src/protocol/RoomStateSnapshotCodec.cpp src/protocol/RoomStateSnapshotCodec.h
+    )
+    target_include_directories(TcpHeartbeatTests PRIVATE src)
+    if (WIN32)
+        target_compile_definitions(TcpHeartbeatTests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+        target_link_libraries(TcpHeartbeatTests PRIVATE ws2_32 bcrypt)
+    endif()
+    add_test(NAME TcpHeartbeatTests COMMAND TcpHeartbeatTests)
+
     add_executable(PacketCodecTests
         tests/PacketCodecTests.cpp
         src/protocol/PacketCodec.cpp
@@ -144,6 +170,22 @@ if (BUILD_TESTING)
     add_test(
         NAME PacketCodecTests
         COMMAND PacketCodecTests
+    )
+
+    add_executable(HeartbeatProtocolTests
+        tests/HeartbeatProtocolTests.cpp
+        src/protocol/HeartbeatTiming.h
+        src/protocol/MessageType.h
+    )
+
+    target_include_directories(HeartbeatProtocolTests
+        PRIVATE
+            src
+    )
+
+    add_test(
+        NAME HeartbeatProtocolTests
+        COMMAND HeartbeatProtocolTests
     )
 
     add_executable(TcpListenerTests

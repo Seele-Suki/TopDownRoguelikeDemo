@@ -19,6 +19,8 @@ namespace TopDownRoguelike.Networking.Protocol
         GameStarted = 18,
         LeaveRoom = 19,
         ErrorMessage = 20,
+        TcpHeartbeatRequest = 21,
+        TcpHeartbeatResponse = 22,
 
         UdpBindRequest = 30,
         UdpBindAccepted = 31,

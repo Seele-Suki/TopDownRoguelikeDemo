@@ -9,6 +9,7 @@
 #include "net/WorldEntityRemovalForwarder.h"
 #include "protocol/UdpBindingCredentialsCodec.h"
 #include "protocol/UdpPacketCodec.h"
+#include "protocol/HeartbeatTiming.h"
 
 #include <stdexcept>
 #include <utility>
@@ -64,6 +65,21 @@ namespace tdr::net
         const std::chrono::milliseconds timeout
     )
     {
+        const auto removeTimedOut = [&]()
+        {
+            const auto sockets = coordinator_.RemoveTimedOutConnections(
+                TcpClientSession::Clock::now(),
+                std::chrono::milliseconds(static_cast<int>(
+                    tdr::protocol::kHeartbeatTimeoutSeconds * 1000.0)));
+            for (const SOCKET socket : sockets)
+            {
+                std::cerr << "[TCP] heartbeat timeout; closing socket "
+                          << static_cast<unsigned long long>(socket)
+                          << std::endl;
+                selectLoop_.RemoveSocket(socket);
+            }
+        };
+
         const SelectResult result =
             selectLoop_.Poll(timeout);
 
@@ -78,8 +94,11 @@ namespace tdr::net
 
         if (result.DidTimeout())
         {
+            removeTimedOut();
             return;
         }
+
+        removeTimedOut();
 
         for (const SOCKET readableSocket :
         result.ReadableSockets())

@@ -179,6 +179,17 @@ namespace TopDownRoguelike.Tests.EditMode
         }
 
         [Test]
+        public void TryCloseOwnedServer_OnlyStopsOwnedProcess()
+        {
+            var gameObject = new GameObject("ServerProcessLauncherTests");
+            var launcher = gameObject.AddComponent<TopDownRoguelike.Networking.Client.ServerProcessLauncher>();
+
+            Assert.That(launcher.TryCloseOwnedServer(), Is.False);
+
+            UnityEngine.Object.DestroyImmediate(gameObject);
+        }
+
+        [Test]
         public void CreateStartInfo_UsesExecutableAndPort()
         {
             var gameObject =

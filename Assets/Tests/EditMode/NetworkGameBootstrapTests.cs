@@ -1882,6 +1882,107 @@ namespace TopDownRoguelike.Tests.EditMode
                 "the remote shotgun visual spawner.");
         }
 
+        [Test]
+        public void ContinueAsSinglePlayer_StopsNetworkGameplayAndRemovesRemotePlayer()
+        {
+            Type bootstrapType = FindType(BootstrapTypeName);
+            Assert.That(bootstrapType, Is.Not.Null);
+
+            var bootstrapObject = new GameObject("Bootstrap Continue Single Player Test");
+            bootstrapObject.SetActive(false);
+            var localPlayer = new GameObject("Local Player");
+            var remotePlayer = new GameObject("Remote Player");
+
+            try
+            {
+                GameSession.ConfigureMultiplayerHost();
+                Component bootstrap = bootstrapObject.AddComponent(bootstrapType);
+                InvokePrivate(bootstrap, "Awake");
+
+                NetworkEntityId localId = localPlayer.AddComponent<NetworkEntityId>();
+                NetworkEntityId remoteId = remotePlayer.AddComponent<NetworkEntityId>();
+                Assert.That(localId.TryAssign(1u, NetworkEntityType.Player), Is.True);
+                Assert.That(remoteId.TryAssign(2u, NetworkEntityType.Player), Is.True);
+
+                NetworkPlayerRegistry playerRegistry =
+                    (NetworkPlayerRegistry)bootstrapType.GetProperty("Registry")?.GetValue(bootstrap);
+                Assert.That(playerRegistry, Is.Not.Null);
+                Assert.That(playerRegistry.TryRegister(1u, localPlayer), Is.True);
+                Assert.That(playerRegistry.TryRegister(2u, remotePlayer), Is.True);
+
+                FieldInfo entityRegistryField = bootstrapType.GetField(
+                    "entityRegistry",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(entityRegistryField, Is.Not.Null);
+                var entityRegistry =
+                    (NetworkEntityRegistry)entityRegistryField.GetValue(bootstrap);
+                Assert.That(entityRegistry.TryRegister(localId), Is.True);
+                Assert.That(entityRegistry.TryRegister(remoteId), Is.True);
+
+                SetPrivateField(bootstrap, "localPlayer", localPlayer);
+                SetPrivateField(bootstrap, "remotePlayer", remotePlayer);
+
+                Component sharedExperienceState =
+                    bootstrapObject.AddComponent(
+                        FindType(
+                            "TopDownRoguelike.Gameplay.Experience." +
+                            "SharedExperienceState"));
+                Component localLevelSystem =
+                    localPlayer.AddComponent(
+                        FindType(
+                            "TopDownRoguelike.Gameplay.Experience." +
+                            "LevelSystem"));
+
+                Type playerPublisherType = FindType(
+                    "TopDownRoguelike.Gameplay.Networking.HostPlayerStatePublisher");
+                Type worldPublisherType = FindType(
+                    "TopDownRoguelike.Gameplay.Networking.HostWorldSnapshotPublisher");
+                Assert.That(playerPublisherType, Is.Not.Null);
+                Assert.That(worldPublisherType, Is.Not.Null);
+                Behaviour playerPublisher =
+                    (Behaviour)bootstrapObject.AddComponent(playerPublisherType);
+                Behaviour worldPublisher =
+                    (Behaviour)bootstrapObject.AddComponent(worldPublisherType);
+                Type shotPublisherType = FindType(
+                    "TopDownRoguelike.Gameplay.Networking.HostPlayerShotPublisher");
+                Assert.That(shotPublisherType, Is.Not.Null);
+                Behaviour shotPublisher =
+                    (Behaviour)bootstrapObject.AddComponent(shotPublisherType);
+
+                MethodInfo continueMethod = bootstrapType.GetMethod(
+                    "ContinueAsSinglePlayer",
+                    BindingFlags.Instance | BindingFlags.Public);
+                Assert.That(continueMethod, Is.Not.Null,
+                    "NetworkGameBootstrap must expose ContinueAsSinglePlayer.");
+
+                continueMethod.Invoke(bootstrap, null);
+
+                Assert.That(GameSession.CurrentMode, Is.EqualTo(GameMode.SinglePlayer));
+                Assert.That(playerPublisher.enabled, Is.False);
+                Assert.That(worldPublisher.enabled, Is.False);
+                Assert.That(shotPublisher.enabled, Is.False);
+                Assert.That(playerRegistry.Count, Is.EqualTo(1));
+                Assert.That(playerRegistry.TryGetPlayer(1u, out GameObject remaining), Is.True);
+                Assert.That(remaining, Is.SameAs(localPlayer));
+                Assert.That(bootstrapType.GetProperty("RemotePlayer")?.GetValue(bootstrap), Is.Null);
+                Assert.That(remotePlayer == null, Is.True);
+                Assert.That(sharedExperienceState == null, Is.True,
+                    "Continuing as single player must remove the " +
+                    "multiplayer shared experience state.");
+                Assert.That(
+                    localPlayer.GetComponent(localLevelSystem.GetType()),
+                    Is.SameAs(localLevelSystem));
+            }
+            finally
+            {
+                GameSession.Reset();
+                if (remotePlayer != null)
+                    UnityEngine.Object.DestroyImmediate(remotePlayer);
+                UnityEngine.Object.DestroyImmediate(localPlayer);
+                UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            }
+        }
+
         private static Component AddInitializedPlayerHealth(
             GameObject playerObject)
         {

@@ -333,6 +333,8 @@ namespace TopDownRoguelike.Networking.Protocol
                 case MessageType.GameStarted:
                 case MessageType.LeaveRoom:
                 case MessageType.ErrorMessage:
+                case MessageType.TcpHeartbeatRequest:
+                case MessageType.TcpHeartbeatResponse:
                 case MessageType.UdpBindRequest:
                 case MessageType.UdpBindAccepted:
                             case MessageType.UdpPing:

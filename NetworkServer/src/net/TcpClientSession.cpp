@@ -38,6 +38,7 @@ namespace tdr::net
             try
             {
                 HandlePacket(packet);
+                MarkActivity();
             }
             catch (const std::exception& exception)
             {
@@ -60,6 +61,10 @@ namespace tdr::net
             }
         }
     }
+
+    void TcpClientSession::MarkActivity(const TimePoint now) noexcept { lastActivity_ = now; }
+    TcpClientSession::TimePoint TcpClientSession::LastActivity() const noexcept { return lastActivity_; }
+    bool TcpClientSession::IsTimedOut(const TimePoint now, const std::chrono::milliseconds timeout) const noexcept { return now - lastActivity_ >= timeout; }
 
     std::vector<std::vector<std::uint8_t>>
         TcpClientSession::TakeOutgoingPackets()
@@ -309,6 +314,14 @@ namespace tdr::net
         const tdr::protocol::DecodedPacket& packet
     )
     {
+        if (packet.type == tdr::protocol::MessageType::TcpHeartbeatRequest)
+        {
+            if (!packet.payload.empty())
+                throw std::invalid_argument("TCP heartbeat request payload must be empty.");
+            outgoingPackets_.push_back(tdr::protocol::PacketCodec::Encode(
+                tdr::protocol::MessageType::TcpHeartbeatResponse, {}));
+            return;
+        }
         if (packet.type
             == tdr::protocol::MessageType::SetNickname)
         {

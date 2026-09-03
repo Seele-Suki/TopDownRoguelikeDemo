@@ -32,6 +32,12 @@ namespace TopDownRoguelike.Networking.Client
         private readonly UdpClientTransport
             udpTransport;
 
+        private readonly ConnectionWatchdog
+            connectionWatchdog;
+
+        private readonly DisconnectState
+            disconnectState = new DisconnectState();
+
         private string serverAddress =
             string.Empty;
 
@@ -68,6 +74,13 @@ namespace TopDownRoguelike.Networking.Client
                 new UdpClientTransport(
                     messageQueue);
 
+            connectionWatchdog =
+                new ConnectionWatchdog(
+                    () => Time.realtimeSinceStartupAsDouble,
+                    () => tcpTransport.Send(
+                        MessageType.TcpHeartbeatRequest,
+                        Array.Empty<byte>()));
+
             dispatcher.EventDispatched +=
                 HandleTransportEvent;
 
@@ -86,6 +99,9 @@ namespace TopDownRoguelike.Networking.Client
 
         public event Action<string>
             ErrorReceived;
+
+        public event Action<DisconnectReason>
+            DisconnectOccurred;
 
         public event Action
             GameStarted;
@@ -214,6 +230,8 @@ namespace TopDownRoguelike.Networking.Client
 
             LastError =
                 string.Empty;
+
+            disconnectState.Reset();
 
             CurrentRoomId =
                 string.Empty;
@@ -703,6 +721,8 @@ namespace TopDownRoguelike.Networking.Client
                 BossCombatStateCodec.Encode(payload));
         }
 
+        public DisconnectReason DisconnectReason => disconnectState.Reason;
+
         public void SendGameResult(GameResultPayload payload)
         {
             ThrowIfDisposed();
@@ -840,10 +860,32 @@ namespace TopDownRoguelike.Networking.Client
         {
             ThrowIfDisposed();
 
+            if (State != NetworkClientState.Disconnected &&
+                State != NetworkClientState.Error &&
+                tcpTransport.IsRunning)
+            {
+                try
+                {
+                    connectionWatchdog.Tick();
+                }
+                catch (TimeoutException)
+                {
+                    messageQueue.Enqueue(
+                        NetworkTransportEvent.Error(
+                            NetworkTransportKind.Tcp,
+                            "TCP heartbeat timed out."));
+                }
+            }
+
             return dispatcher.DispatchPending();
         }
 
         public void Disconnect()
+        {
+            Disconnect(true);
+        }
+
+        public void Disconnect(bool notifyDisconnect)
         {
             if (disposed)
             {
@@ -852,15 +894,22 @@ namespace TopDownRoguelike.Networking.Client
 
             try
             {
+                bool beganDisconnect =
+                    disconnectState.TryBegin(
+                        DisconnectReason.LocalLeaveRoom);
+                connectionWatchdog.Stop();
                 StopTransports();
 
-                ClearSession();
-
-                LastError =
-                    string.Empty;
+            ClearSession();
 
                 TransitionTo(
                     NetworkClientState.Disconnected);
+
+                if (beganDisconnect && notifyDisconnect)
+                {
+                    DisconnectOccurred?.Invoke(
+                        DisconnectReason.LocalLeaveRoom);
+                }
             }
             catch (Exception exception)
             {
@@ -896,7 +945,10 @@ namespace TopDownRoguelike.Networking.Client
             if (transportEvent.EventType ==
                 NetworkTransportEventType.Error)
             {
-                Fail(
+                HandleDisconnect(
+                    transportEvent.ErrorMessage == "TCP heartbeat timed out."
+                        ? DisconnectReason.HeartbeatTimeout
+                        : DisconnectReason.TransportError,
                     transportEvent.ErrorMessage);
 
                 return;
@@ -905,9 +957,11 @@ namespace TopDownRoguelike.Networking.Client
             if (transportEvent.EventType ==
                 NetworkTransportEventType.Disconnected)
             {
-                Fail(
-                    $"{transportEvent.TransportKind} " +
-                    "transport disconnected.");
+                HandleDisconnect(
+                    transportEvent.TransportKind == NetworkTransportKind.Tcp
+                        ? DisconnectReason.ServerClosed
+                        : DisconnectReason.TransportError,
+                    $"{transportEvent.TransportKind} transport disconnected.");
 
                 return;
             }
@@ -937,6 +991,7 @@ namespace TopDownRoguelike.Networking.Client
                 State ==
                 NetworkClientState.ConnectingTcp)
             {
+                connectionWatchdog.Start();
                 TransitionTo(
                     NetworkClientState
                         .WaitingForServerHello);
@@ -956,6 +1011,9 @@ namespace TopDownRoguelike.Networking.Client
         private void HandlePacketReceived(
             NetworkTransportEvent transportEvent)
         {
+            if (transportEvent.TransportKind == NetworkTransportKind.Tcp)
+                connectionWatchdog.MarkActivity();
+
             if (transportEvent.TransportKind ==
                 NetworkTransportKind.Tcp &&
                 transportEvent.PacketType ==
@@ -1301,8 +1359,25 @@ namespace TopDownRoguelike.Networking.Client
                         "match the current room.");
                 }
 
+                RoomStateSnapshot previousRoomState =
+                    CurrentRoomState;
+
                 CurrentRoomState =
                     snapshot;
+
+                Debug.Log(
+                    $"NetworkClient received room snapshot: room={snapshot.RoomId}, " +
+                    $"previousPlayers={(previousRoomState == null ? -1 : previousRoomState.Players.Count)}, " +
+                    $"currentPlayers={snapshot.Players.Count}, state={State}.");
+
+                if (State == NetworkClientState.InRoom &&
+                    previousRoomState != null &&
+                    previousRoomState.Players.Count > snapshot.Players.Count)
+                {
+                    Debug.Log("NetworkClient publishing RemotePeerLeft from room snapshot.");
+                    DisconnectOccurred?.Invoke(
+                        DisconnectReason.RemotePeerLeft);
+                }
 
                 RoomStateChanged?.Invoke(
                     snapshot);
@@ -1738,6 +1813,9 @@ namespace TopDownRoguelike.Networking.Client
                 CurrentRoomState =
                     null;
 
+                DisconnectOccurred?.Invoke(
+                    DisconnectReason.RemotePeerLeft);
+
                 TransitionTo(
                     NetworkClientState.Connected);
             }
@@ -1831,6 +1909,16 @@ namespace TopDownRoguelike.Networking.Client
         private void Fail(
             string errorMessage)
         {
+            HandleDisconnect(DisconnectReason.TransportError, errorMessage);
+        }
+
+        private void HandleDisconnect(
+            DisconnectReason reason,
+            string errorMessage)
+        {
+            if (!disconnectState.TryBegin(reason))
+                return;
+
             string finalError =
                 string.IsNullOrWhiteSpace(errorMessage)
                     ? "Unknown network error."
@@ -1841,6 +1929,7 @@ namespace TopDownRoguelike.Networking.Client
 
             try
             {
+                connectionWatchdog.Stop();
                 StopTransports();
             }
             catch (Exception stopException)
@@ -1858,6 +1947,8 @@ namespace TopDownRoguelike.Networking.Client
 
             TransitionTo(
                 NetworkClientState.Error);
+
+            DisconnectOccurred?.Invoke(reason);
         }
 
         private void StopTransports()

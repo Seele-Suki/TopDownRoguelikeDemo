@@ -16,12 +16,15 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <chrono>
 
 namespace tdr::net
 {
     class TcpClientSession final
     {
     public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
         TcpClientSession(
             tdr::room::PlayerIdAllocator& playerIdAllocator,
             tdr::room::SessionTokenGenerator& tokenGenerator,
@@ -32,6 +35,10 @@ namespace tdr::net
             const std::uint8_t* data,
             std::size_t size
         );
+
+        void MarkActivity(TimePoint now = Clock::now()) noexcept;
+        [[nodiscard]] TimePoint LastActivity() const noexcept;
+        [[nodiscard]] bool IsTimedOut(TimePoint now, std::chrono::milliseconds timeout) const noexcept;
 
         [[nodiscard]]
         std::vector<std::vector<std::uint8_t>>
@@ -187,5 +194,6 @@ namespace tdr::net
         std::vector<std::vector<std::uint8_t>> bossCombatStatePayloads_;
         std::vector<std::vector<std::uint8_t>> gameResultPayloads_;
         std::vector<std::vector<std::uint8_t>> playerDiedPayloads_;
+        TimePoint lastActivity_ = Clock::now();
     };
 }

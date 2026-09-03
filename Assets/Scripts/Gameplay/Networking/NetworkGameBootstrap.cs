@@ -67,6 +67,9 @@ namespace TopDownRoguelike.Gameplay.Networking
         private NetworkClient playerDeathClient;
         private LevelSystem hostUpgradeLevelSystem;
         private NetworkClient upgradeMessageClient;
+        private readonly NetworkShutdownCoordinator shutdownCoordinator =
+            new NetworkShutdownCoordinator();
+        private bool continuedAsSinglePlayer;
 
         public NetworkPlayerRegistry Registry =>
             registry;
@@ -86,6 +89,165 @@ namespace TopDownRoguelike.Gameplay.Networking
             uint,
             PlayerShotgunEvent>
             PlayerShotgunEventReceived;
+
+        public bool ContinueAsSinglePlayer()
+        {
+            if (continuedAsSinglePlayer || !GameSession.IsHost)
+                return false;
+
+            continuedAsSinglePlayer = true;
+
+            DisableNetworkGameplayBehaviours();
+            UnsubscribeNetworkGameplayEvents();
+            RemoveSharedExperienceState();
+            RemoveRemotePlayer();
+
+            NetworkClientBehaviour.Instance?.Client?.Disconnect(false);
+            GameSession.ConfigureSinglePlayer();
+
+            return true;
+        }
+
+        private void RemoveSharedExperienceState()
+        {
+            SharedExperienceState shared =
+                GetComponent<SharedExperienceState>();
+            if (shared == null)
+                return;
+
+            shared.StateChanged -= ApplyHostSharedExperienceToLocalPlayer;
+
+            if (Application.isPlaying)
+                Destroy(shared);
+            else
+                DestroyImmediate(shared);
+        }
+
+        private void DisableNetworkGameplayBehaviours()
+        {
+            DisableBehaviour<HostPlayerStatePublisher>(gameObject);
+            DisableBehaviour<HostWorldSnapshotPublisher>(gameObject);
+            DisableBehaviour<HostEnemySpawnPublisher>(gameObject);
+            DisableBehaviour<HostExperienceOrbSpawnPublisher>(gameObject);
+            DisableBehaviour<HostBossSpawnPublisher>(gameObject);
+            DisableBehaviour<HostEnemyDeathPublisher>(gameObject);
+            DisableBehaviour<HostExperienceOrbCollectionPublisher>(gameObject);
+            DisableBehaviour<HostBossDeathPublisher>(gameObject);
+            DisableBehaviour<HostSharedExperiencePublisher>(gameObject);
+            DisableBehaviour<NetworkUpgradeCoordinator>(gameObject);
+            DisableBehaviour<NetworkBossCoordinator>(gameObject);
+            DisableBehaviour<NetworkBossProjectileBridge>(gameObject);
+            DisableBehaviour<ClientWorldSnapshotConsumer>(gameObject);
+            DisableBehaviour<HostPlayerShotPublisher>(gameObject);
+
+            DisableBehaviour<HostPlayerShotPublisher>(localPlayer);
+            DisableBehaviour<HostPlayerShotgunPublisher>(localPlayer);
+            DisableBehaviour<HostPlayerShotgunPublisher>(remotePlayer);
+        }
+
+        private void UnsubscribeNetworkGameplayEvents()
+        {
+            if (hostUpgradeLevelSystem != null)
+            {
+                hostUpgradeLevelSystem.OnLevelUp -= HandleHostUpgradeLevelUp;
+                hostUpgradeLevelSystem = null;
+            }
+
+            if (networkUpgradeCoordinator != null)
+            {
+                networkUpgradeCoordinator.UpgradeStarted -= HandleHostUpgradeStarted;
+                networkUpgradeCoordinator.UpgradeApplied -= HandleHostUpgradeApplied;
+                networkUpgradeCoordinator.UpgradeCompleted -= HandleHostUpgradeCompleted;
+            }
+
+            if (networkBossCoordinator != null)
+                networkBossCoordinator.StateBroadcastRequested -= HandleHostBossCombatStateBroadcast;
+
+            if (bossCombatStateClient != null)
+            {
+                bossCombatStateClient.BossCombatStateReceived -= HandleClientBossCombatState;
+                bossCombatStateClient = null;
+            }
+
+            if (gameResultGameManager != null)
+            {
+                gameResultGameManager.OnStateChanged -= HandleHostResultState;
+                gameResultGameManager = null;
+            }
+
+            if (gameResultClient != null)
+            {
+                gameResultClient.GameResultReceived -= HandleClientGameResult;
+                gameResultClient = null;
+            }
+
+            if (clientLocalPlayerHealth != null)
+            {
+                clientLocalPlayerHealth.OnDied -= HandleClientPlayerDied;
+                clientLocalPlayerHealth = null;
+            }
+
+            if (hostRemotePlayerHealth != null)
+            {
+                hostRemotePlayerHealth.OnDied -= HandleRemotePlayerDied;
+                hostRemotePlayerHealth = null;
+            }
+
+            if (playerDeathClient != null)
+            {
+                playerDeathClient.PlayerDiedReceived -= HandleRemotePlayerDied;
+                playerDeathClient = null;
+            }
+
+            if (stateSnapshotClient != null)
+            {
+                stateSnapshotClient.PlayerStateSnapshotReceived -= HandleRemotePlayerStateSnapshot;
+                stateSnapshotClient = null;
+            }
+
+            if (shotEventClient != null)
+            {
+                shotEventClient.PlayerShotEventReceived -= HandleRemotePlayerShotEvent;
+                shotEventClient = null;
+            }
+
+            if (shotgunEventClient != null)
+            {
+                shotgunEventClient.PlayerShotgunEventReceived -= HandleRemotePlayerShotgunEvent;
+                shotgunEventClient = null;
+            }
+
+            if (remoteInputClient != null)
+            {
+                remoteInputClient.RemotePlayerInputReceived -= HandleRemotePlayerInput;
+                remoteInputClient = null;
+            }
+        }
+
+        private void RemoveRemotePlayer()
+        {
+            if (remotePlayer == null)
+                return;
+
+            NetworkEntityId identifier =
+                remotePlayer.GetComponent<NetworkEntityId>();
+
+            if (identifier != null && identifier.IsAssigned)
+            {
+                registry?.Remove(identifier.EntityId);
+                entityRegistry?.Remove(identifier.EntityId);
+            }
+
+            DestroyPlayer(remotePlayer);
+            remotePlayer = null;
+        }
+
+        private static void DisableBehaviour<T>(GameObject owner)
+            where T : Behaviour
+        {
+            if (owner != null && owner.TryGetComponent(out T behaviour))
+                behaviour.enabled = false;
+        }
 
         private void Awake()
         {
@@ -2578,6 +2740,11 @@ namespace TopDownRoguelike.Gameplay.Networking
 
         private void OnDestroy()
         {
+            if (!shutdownCoordinator.TryBeginShutdown())
+            {
+                return;
+            }
+
             if (hostUpgradeLevelSystem != null)
             {
                 hostUpgradeLevelSystem.OnLevelUp -=
@@ -2696,7 +2863,37 @@ namespace TopDownRoguelike.Gameplay.Networking
                     null;
             }
 
+            if (GameSession.IsMultiplayer && entityRegistry != null)
+            {
+                List<GameObject> networkObjects =
+                    new List<GameObject>();
+
+                foreach (NetworkEntityId entity in
+                    entityRegistry.EnumerateEntities())
+                {
+                    if (entity != null &&
+                        entity.gameObject != null &&
+                        !networkObjects.Contains(entity.gameObject))
+                    {
+                        networkObjects.Add(entity.gameObject);
+                    }
+                }
+
+                foreach (GameObject networkObject in networkObjects)
+                {
+                    DestroyPlayer(networkObject);
+                }
+            }
+
+            NetworkClientBehaviour networkClientBehaviour =
+                NetworkClientBehaviour.Instance;
+
+            networkClientBehaviour?.Client?.Disconnect();
+
             registry?.Clear();
+            entityRegistry?.Clear();
+
+            GameSession.Reset();
 
             localPlayer = null;
             remotePlayer = null;

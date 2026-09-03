@@ -500,9 +500,7 @@ namespace tdr::net
         if (connectionIterator
             == connections_.end())
         {
-            throw std::out_of_range(
-                "TCP connection is not attached."
-            );
+            return;
         }
 
         const std::uint32_t playerId =
@@ -557,6 +555,21 @@ namespace tdr::net
                 remainingRoomId
             );
         }
+    }
+
+    std::vector<SOCKET> ServerCoordinator::RemoveTimedOutConnections(
+        const TcpClientSession::TimePoint now,
+        const std::chrono::milliseconds timeout)
+    {
+        std::vector<SOCKET> timedOut;
+        for (const auto& entry : connections_)
+        {
+            if (FindSession(entry.second.playerId).IsTimedOut(now, timeout))
+                timedOut.push_back(entry.first);
+        }
+        for (const SOCKET socket : timedOut)
+            RemoveConnection(socket);
+        return timedOut;
     }
 
     std::size_t

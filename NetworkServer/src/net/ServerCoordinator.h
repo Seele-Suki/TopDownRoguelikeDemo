@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <vector>
 #include <string>
+#include <chrono>
 
 namespace tdr::net
 {
@@ -95,6 +96,11 @@ namespace tdr::net
 
         void RemoveConnection(
             SOCKET socket
+        );
+
+        [[nodiscard]] std::vector<SOCKET> RemoveTimedOutConnections(
+            TcpClientSession::TimePoint now,
+            std::chrono::milliseconds timeout
         );
 
         [[nodiscard]]

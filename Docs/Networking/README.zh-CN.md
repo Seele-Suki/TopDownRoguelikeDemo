@@ -1,6 +1,6 @@
 # Golden Sand Caravan 联机网络文档
 
-这是 `Golden Sand Caravan（金砂旅团）` 联机系统的中文总览，面向项目学习、构建、测试和面试复盘。它汇总 `Docs/Networking` 下的五份英文技术文档；协议和命令以工程当前实现为准。
+这是 `Golden Sand Caravan（金砂旅团）` 联机系统的中文总览，面向项目学习、构建和测试。它汇总 `Docs/Networking` 下的五份英文技术文档；协议和命令以工程当前实现为准。
 
 ## 文档导航
 

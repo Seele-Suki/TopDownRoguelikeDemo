@@ -33,10 +33,10 @@ sysinfo.txt
 *.dmp
 
 # Builds and large local artifacts
+/NetworkServer/build-release/
 *.apk
 *.aab
 *.app
 *.exe
 *.zip
 *.7z
-

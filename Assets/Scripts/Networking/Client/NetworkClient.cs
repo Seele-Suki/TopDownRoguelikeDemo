@@ -50,6 +50,14 @@ namespace TopDownRoguelike.Networking.Client
 
         private uint pendingBindSequence;
 
+        private const double UdpBindRetryIntervalSeconds = 1.0;
+
+        private const int MaxUdpBindAttempts = 5;
+
+        private double nextUdpBindAttemptAt;
+
+        private int udpBindAttempts;
+
         private bool hasLastPlayerStateSequence;
 
         private uint lastPlayerStateSequence;
@@ -244,6 +252,12 @@ namespace TopDownRoguelike.Networking.Client
 
             pendingBindSequence =
                 0u;
+
+            nextUdpBindAttemptAt =
+                0.0;
+
+            udpBindAttempts =
+                0;
 
             PlayerId =
                 0u;
@@ -876,6 +890,8 @@ namespace TopDownRoguelike.Networking.Client
                             "TCP heartbeat timed out."));
                 }
             }
+
+            TickUdpBinding();
 
             return dispatcher.DispatchPending();
         }
@@ -1868,16 +1884,30 @@ namespace TopDownRoguelike.Networking.Client
         {
             try
             {
+                if (State != NetworkClientState.BindingUdp)
+                {
+                    TransitionTo(
+                        NetworkClientState.BindingUdp);
+                    udpBindAttempts = 0;
+                }
+
                 pendingBindSequence =
                     nextUdpSequence++;
 
-                TransitionTo(
-                    NetworkClientState.BindingUdp);
+                udpBindAttempts++;
+                nextUdpBindAttemptAt =
+                    Time.realtimeSinceStartupAsDouble +
+                    UdpBindRetryIntervalSeconds;
 
                 udpTransport.Send(
                     MessageType.UdpBindRequest,
                     pendingBindSequence,
                     Array.Empty<byte>());
+
+                Debug.Log(
+                    $"NetworkClient: UDP bind request sent " +
+                    $"(attempt {udpBindAttempts}/{MaxUdpBindAttempts}, " +
+                    $"sequence {pendingBindSequence}).");
             }
             catch (Exception exception)
             {
@@ -1902,8 +1932,35 @@ namespace TopDownRoguelike.Networking.Client
             pendingBindSequence =
                 0u;
 
+            udpBindAttempts =
+                0;
+
+            nextUdpBindAttemptAt =
+                0.0;
+
             TransitionTo(
                 NetworkClientState.Connected);
+        }
+
+        private void TickUdpBinding()
+        {
+            if (State != NetworkClientState.BindingUdp ||
+                udpBindAttempts == 0 ||
+                Time.realtimeSinceStartupAsDouble < nextUdpBindAttemptAt)
+            {
+                return;
+            }
+
+            if (udpBindAttempts >= MaxUdpBindAttempts)
+            {
+                Fail(
+                    "UDP binding timed out after " +
+                    MaxUdpBindAttempts +
+                    " attempts.");
+                return;
+            }
+
+            SendUdpBindRequest();
         }
 
         private void Fail(

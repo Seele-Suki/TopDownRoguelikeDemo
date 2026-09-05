@@ -1479,9 +1479,18 @@ namespace TopDownRoguelike.Tests.EditMode
                         client.ConnectCallCount,
                         Is.EqualTo(1));
 
+                    Type resolverType =
+                        FindType(
+                            "TopDownRoguelike.Menu.UI." +
+                            "LocalIpv6AddressResolver");
+                    string expectedAddress =
+                        (string)resolverType.GetMethod(
+                                "ResolveLocalAddressOrLoopback")
+                            .Invoke(null, null);
+
                     Assert.That(
                         client.LastAddress,
-                        Is.EqualTo("::1"));
+                        Is.EqualTo(expectedAddress));
 
                     Assert.That(
                         client.LastPort,

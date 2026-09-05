@@ -163,9 +163,8 @@ namespace TopDownRoguelike.Networking.Transport
                     return;
                 }
 
-                client.Connect(
-                    address,
-                    port);
+                IPEndPoint serverEndpoint =
+                    ResolveServerEndpoint(address, port);
 
                 if (stopSignal.IsSet)
                 {
@@ -183,7 +182,9 @@ namespace TopDownRoguelike.Networking.Transport
 
                 while (!stopSignal.IsSet)
                 {
-                    SendQueuedDatagrams(client);
+                    SendQueuedDatagrams(
+                        client,
+                        serverEndpoint);
 
                     if (!client.Client.Poll(
                         10000,
@@ -217,8 +218,29 @@ namespace TopDownRoguelike.Networking.Transport
             }
         }
 
+        private static IPEndPoint ResolveServerEndpoint(
+            string address,
+            int port)
+        {
+            IPAddress[] addresses =
+                Dns.GetHostAddresses(address);
+
+            foreach (IPAddress candidate in addresses)
+            {
+                if (candidate.AddressFamily ==
+                    AddressFamily.InterNetworkV6)
+                {
+                    return new IPEndPoint(candidate, port);
+                }
+            }
+
+            throw new SocketException(
+                (int)SocketError.AddressFamilyNotSupported);
+        }
+
         private void SendQueuedDatagrams(
-            UdpClient client)
+            UdpClient client,
+            IPEndPoint serverEndpoint)
         {
             while (outgoingDatagrams.TryDequeue(
                 out byte[] datagram))
@@ -226,7 +248,8 @@ namespace TopDownRoguelike.Networking.Transport
                 int bytesSent =
                     client.Send(
                         datagram,
-                        datagram.Length);
+                        datagram.Length,
+                        serverEndpoint);
 
                 if (bytesSent !=
                     datagram.Length)

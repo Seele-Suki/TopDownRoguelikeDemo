@@ -21,6 +21,20 @@
 
 namespace tdr::net
 {
+    namespace
+    {
+        bool IsClientDisconnectError(
+            const int errorCode
+        ) noexcept
+        {
+            return errorCode == WSAECONNRESET ||
+                errorCode == WSAECONNABORTED ||
+                errorCode == WSAENETRESET ||
+                errorCode == WSAENOTCONN ||
+                errorCode == WSAESHUTDOWN;
+        }
+    }
+
     ServerLoop::ServerLoop(
         TcpListener& listener,
         UdpSocket& udpSocket,
@@ -119,6 +133,10 @@ namespace tdr::net
 
                 std::vector<std::uint8_t> response;
 
+                tdr::protocol::MessageType receivedType{};
+                std::uint32_t receivedPlayerId = 0U;
+                std::uint32_t receivedSequence = 0U;
+
                 sockaddr_in6 responseDestination =
                     sourceAddress;
 
@@ -130,9 +148,19 @@ namespace tdr::net
                             receivedByteCount
                         );
 
+                    receivedType = packet.header.type;
+                    receivedPlayerId = packet.header.playerId;
+                    receivedSequence = packet.header.sequence;
+
                     switch (packet.header.type)
                     {
                     case tdr::protocol::MessageType::UdpBindRequest:
+                        std::cout
+                            << "[UDP] bind request received for player "
+                            << packet.header.playerId
+                            << " sequence "
+                            << packet.header.sequence
+                            << std::endl;
                         response =
                             udpBindHandler_.Handle(
                                 receiveBuffer.data(),
@@ -258,7 +286,7 @@ namespace tdr::net
                 catch (const std::exception& exception)
                 {
                     std::cerr
-                        << "[UDP] PlayerShotEvent, PlayerShotgunEvent, or other UDP packet was rejected: "
+                        << "[UDP] packet rejected: "
                         << exception.what()
                         << std::endl;
 
@@ -272,6 +300,17 @@ namespace tdr::net
                         responseDestination
                     )
                 );
+
+                if (receivedType ==
+                    tdr::protocol::MessageType::UdpBindRequest)
+                {
+                    std::cout
+                        << "[UDP] bind accepted for player "
+                        << receivedPlayerId
+                        << " sequence "
+                        << receivedSequence
+                        << std::endl;
+                }
 
                 continue;
             }
@@ -357,8 +396,13 @@ namespace tdr::net
                 const int errorCode =
                     ::WSAGetLastError();
 
-                if (errorCode == WSAECONNRESET)
+                if (IsClientDisconnectError(errorCode))
                 {
+                    std::cerr
+                        << "[TCP] client socket closed during receive; "
+                        << "WSA error code: "
+                        << errorCode
+                        << std::endl;
                     selectLoop_.RemoveSocket(
                         readableSocket
                     );

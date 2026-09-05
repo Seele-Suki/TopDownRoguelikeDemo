@@ -112,6 +112,7 @@ namespace TopDownRoguelike.Menu.UI
 
         public void OpenEntryPanel()
         {
+            RefreshHostAddress();
 
             if (roomLobbyPanel != null)
             {
@@ -144,6 +145,7 @@ namespace TopDownRoguelike.Menu.UI
 
         public void HandleCreateRoom()
         {
+            RefreshHostAddress();
             RoomConnectionRequest request;
 
             try
@@ -225,6 +227,12 @@ namespace TopDownRoguelike.Menu.UI
                         exception.Message);
                 }
             }
+        }
+
+        private void RefreshHostAddress()
+        {
+            hostAddress =
+                LocalIpv6AddressResolver.ResolveLocalAddressOrLoopback();
         }
 
         public void HandleJoinRoom()

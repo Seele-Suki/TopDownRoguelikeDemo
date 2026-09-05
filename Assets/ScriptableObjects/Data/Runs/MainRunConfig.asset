@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7169c01870eac4a4b88930988bb34304, type: 3}
   m_Name: MainRunConfig
   m_EditorClassIdentifier: 
-  bossStartTime: 30
+  bossStartTime: 240
   spawnIntervalCurve:
     serializedVersion: 2
     m_Curve:

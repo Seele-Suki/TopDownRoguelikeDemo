@@ -5089,7 +5089,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: github.com/Seele-Suki/TopDownRoguelikeDemo
+  m_text: github.com/Seele-Suki/GoldenSandCaravan
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -6009,8 +6009,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 480, y: -120}
-  m_SizeDelta: {x: 600, y: 110}
+  m_AnchoredPosition: {x: 315, y: -120}
+  m_SizeDelta: {x: 400, y: 110}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &726224883
 MonoBehaviour:
@@ -6032,7 +6032,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u8FD9\u662F\u6E38\u620F\u6807\u9898"
+  m_text: "\u91D1\u7802\u65C5\u56E2"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: f92f96fb3dc86594d8159f3d93d6a64e, type: 2}
   m_sharedMaterial: {fileID: -1889922193731654174, guid: f92f96fb3dc86594d8159f3d93d6a64e, type: 2}
@@ -17802,6 +17802,7 @@ MonoBehaviour:
   dialogView: {fileID: 1977092924}
   role: 2
   isInGameplay: 0
+  inferRoleFromGameSession: 1
 --- !u!114 &1977092924
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -18701,7 +18702,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b44fff1b040f3a848a15dd78bb4bb44c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startupMode: 0
+  startupMode: 1
   executableFileName: NetworkServer.exe
   serverPort: 7777
 --- !u!1 &2076463806
